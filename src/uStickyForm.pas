@@ -10,7 +10,7 @@ uses
   Vcl.ExtDlgs,
   IdBaseComponent, IdComponent, IdTCPConnection,
   IdTCPClient, IdHTTP, System.ImageList, PasLibVlcPlayerUnit, Vcl.ImgList,
-  IdSSLOpenSSL, RegularExpressions;
+  IdSSLOpenSSL, RegularExpressions, System.Net.HttpClientComponent;
 type
   TfrmStickyForm = class(TForm)
     PopupMenu1: TPopupMenu;
@@ -46,7 +46,6 @@ type
     procedure ParseM3U(const FileName: string);
     function LoadPNGToImageList(const AFileName: string): Integer;
     function GetLogoIndexForItem(Index: Integer): Integer;
-    procedure UpdateMemo(const Text: string);
   public
     property ParentChanName   : WideString read FParentChanName write SetParentChanName;
     property ParentChanHandle : HWND read FParentChanHandle write SetParentChanHandle;
@@ -57,8 +56,7 @@ type
   TDownloadThread = class(TThread)
   private
     FFileName: string;
-    FSSLIOHandler: TIdSSLIOHandlerSocketOpenSSL;
-    FIdHTTP: TIdHTTP;
+    FNetHTTPClient: TNetHTTPClient;
     FStream: TMemoryStream;
     FURLList: TStringList;
     FForm: TfrmStickyForm;
@@ -68,6 +66,7 @@ type
     constructor Create(const FileName: string; Form: TfrmStickyForm);
     destructor Destroy; override;
   end;
+
 
 { TfrmStickyForm }
 var
@@ -84,47 +83,72 @@ implementation
 uses FullScreenFormUnit, uPlugin, Unit1;
 
 
-procedure InitializeSSL;
-begin
-  if not IdSSLOpenSSL.LoadOpenSSLLibrary then
-//  begin
-///  IdSSLOpenSSL.LoadOpenSSLLibrary('C:\Program Files (x86)\CommFort\Plugins\libeay32.dll');
-//  IdSSLOpenSSL.LoadOpenSSLCryptoLibrary('C:\Program Files (x86)\CommFort\Plugins\ssleay32.dll');
-//  end;
-   raise Exception.Create('Не удалось загрузить библиотеку OpenSSL');
-end;
 
-
+// Функция извлечения значения атрибута tvg-id из строки
 function ExtractTVGID(const Line: string): string;
 var
   RegEx: TRegEx;
   Match: TMatch;
 begin
-  RegEx := TRegEx.Create('tvg-id="([^"]+)"');
+  RegEx := TRegEx.Create('tvg-id="([^"]+)"'); // Регулярное выражение для парсинга
   Match := RegEx.Match(Line);
   if Match.Success then
-    Result := Match.Groups[1].Value
+    Result := Match.Groups[1].Value // Получаем значение первого захвата группы
   else
-    Result := '';
+    Result := ''; // Если совпадение не найдено, возвращаем пустую строку
 end;
 
+// Проверка сигнатуры PNG-файла
+function CheckPNGSignature(Stream: TStream): Boolean;
+const
+  PNG_SIGNATURE: array[0..7] of Byte = ($89, $50, $4E, $47, $0D, $0A, $1A, $0A);
+var
+  BytesRead: Integer;
+  SignatureBytes: array[0..7] of Byte;
+begin
+  Result := False;
+
+  // Сохраняем оригинальную позицию потока
+  var OldPos := Stream.Position;
+
+  try
+    // Перемещаемся в начало потока
+    Stream.Position := 0;
+
+    // Чтение первых восьми байтов
+    BytesRead := Stream.Read(SignatureBytes, SizeOf(PNG_SIGNATURE));
+
+    // Восстанавливаем позицию потока обратно
+    Stream.Position := OldPos;
+
+    // Проверяем совпадение сигнатуры
+    Result := (BytesRead = SizeOf(PNG_SIGNATURE)) and CompareMem(@SignatureBytes, @PNG_SIGNATURE, SizeOf(PNG_SIGNATURE));
+  except
+    on E: Exception do
+    begin
+      Result := False;
+    end;
+  end;
+end;
+
+// Конструктор потока загрузки
 constructor TDownloadThread.Create(const FileName: string; Form: TfrmStickyForm);
 begin
-  inherited Create(True);
-  FreeOnTerminate := True;
+  inherited Create(True); // Создаем поток приостановленным
+  FreeOnTerminate := True; // Освобождать автоматически при завершении
   FFileName := FileName;
   FForm := Form;
 end;
 
-procedure TfrmStickyForm.UpdateMemo(const Text: string);
-begin
-  Memo1.Lines.Add(Text);
-  Memo1.Update;
-end;
-
-
+// Деструктор потока загрузки
 destructor TDownloadThread.Destroy;
 begin
+  if Assigned(FStream) then
+    FStream.Free; // Освобождение памяти для Memory Stream
+  if Assigned(FNetHTTPClient) then
+    FNetHTTPClient.Free; // Освобождение HTTP-клиента
+  if Assigned(FURLList) then
+    FURLList.Free; // Освобождение списка строк
   inherited;
 end;
 
@@ -133,120 +157,61 @@ var
   I: Integer;
   Line, TVGID: String;
   FileName: String;
+  TempStream: TMemoryStream; // Локальная переменная потока
 begin
-  // Инициализация SSL и HTTP компонентов
-  FSSLIOHandler := TIdSSLIOHandlerSocketOpenSSL.Create(nil);
-  FSSLIOHandler.SSLOptions.SSLVersions := [sslvTLSv1_2]; // Можно добавить sslvTLSv1_3 для совместимости
-  FSSLIOHandler.ConnectTimeout := 10000;
-  FSSLIOHandler.ReadTimeout := 0;
-
-  FIdHTTP := TIdHTTP.Create(nil);
-  FIdHTTP.IOHandler := FSSLIOHandler;
-  FIdHTTP.Request.UserAgent := 'Mozilla/5.0'; // Установим стандартный User-Agent
-  FIdHTTP.HandleRedirects := False; // Лучше разрешить перенаправление, если оно понадобится
-  FIdHTTP.ReadTimeout := 0;
-
-  FStream := TMemoryStream.Create;
+  FNetHTTPClient := TNetHTTPClient.Create(nil); // Клиент остаётся общим
   FURLList := TStringList.Create;
 
   try
-    // Загружаем список URL из файла
-    if not FileExists(FFileName) then
-    begin
-      Synchronize(
-        procedure
-        begin
-          ShowMessage('Файл не найден: ' + FFileName);
-        end
-      );
-      Exit;
-    end;
-
-    FURLList.LoadFromFile(FFileName); // Чтение списка URL
+    FURLList.LoadFromFile(FFileName);
 
     for I := 0 to FURLList.Count - 1 do
     begin
       Line := FURLList[I];
+
       if Pos('tvg-logo="', Line) > 0 then
       begin
-        // Извлекаем URL логотипа
         Delete(Line, 1, Pos('tvg-logo=', Line) + Length('tvg-logo='));
-        Line := Trim(Copy(Line, 1, Pos('"', Line) - 1)); // Получили адрес логотипа
+        Line := Trim(Copy(Line, 1, Pos('"', Line) - 1));
 
-        TVGID := ExtractTVGID(FURLList[I]); // Извлекаем ТВ-GUID
-        if TVGID = '' then Continue; // Пропускаем строки без TVGID
-
-        // Формируем имя файла
-        FileName := Format('%s.png', [TVGID]);
-
-        // Проверяем существование файла
-        if FileExists('C:\Delphi\Source\Save Image M3U\Win32\Debug\' + FileName) then
+        TVGID := ExtractTVGID(FURLList[I]);
+        if TVGID <> '' then
         begin
-          Synchronize(
-            procedure
-            begin
-              ShowMessage(Format('Файл уже существует: %s', [FileName]));
-            end
-          );
-          Continue;
-        end;
+          FileName := Format('%s.png', [TVGID]);
 
-        try
-          FStream.Clear;
-          FIdHTTP.Get(Line, FStream); // Запрашиваем картинку
+          if FileExists(FileName) then
+            Continue;
 
-          if FStream.Size > 0 then
-          begin
-            FStream.Position := 0; // Устанавливаем позицию начала потока
-            FStream.SaveToFile('C:\Delphi\Source\Save Image M3U\Win32\Debug\' + FileName); // Сохраняем файл
-            Synchronize(
-              procedure
+
+          // Создаём отдельный поток для каждого изображения
+          TempStream := TMemoryStream.Create;
+          try
+            try
+              FNetHTTPClient.Get(Line, TempStream);
+
+              if TempStream.Size > 0 then
               begin
-                frmStickyForm.UpdateMemo(Format('Загрузка логотипа: %s', [TVGID]));
+                // Проверяем, является ли файл настоящим PNG-изображением
+                if CheckPNGSignature(TempStream) then
+                  TempStream.SaveToFile(FileName)
               end
-            );
-          end
-          else
-          begin
-            Synchronize(
-              procedure
+            except
+              on E: Exception do
               begin
-               frmStickyForm.UpdateMemo(Format('Пустой ответ от сервера для: %s', [TVGID]));
-              end
-            );
-          end;
-        except
-          on E: EIdHTTPProtocolException do
-          begin
-            Synchronize(
-              procedure
-              begin
-                frmStickyForm.UpdateMemo(Format('Пропущен URL из-за ошибки протокола: %s', [Line]));
-              end
-            );
-            Continue;
-          end;
-          on E: Exception do
-          begin
-            Synchronize(
-              procedure
-              begin
-                frmStickyForm.UpdateMemo(Format('Пропущен URL из-за ошибки: %s', [E.Message]));
-              end
-            );
-            Continue;
+                // Пропускаем все ошибки
+              end;
+            end;
+          finally
+            FreeAndNil(TempStream); // Освобождаем память после загрузки
           end;
         end;
       end;
     end;
   finally
     FreeAndNil(FURLList);
-    FreeAndNil(FStream);
-    FreeAndNil(FIdHTTP);
-    FreeAndNil(FSSLIOHandler);
+    FreeAndNil(FNetHTTPClient);
   end;
 end;
-
 
 
 function TfrmStickyForm.LoadPNGToImageList(const AFileName: string): Integer;

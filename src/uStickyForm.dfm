@@ -64,7 +64,8 @@ object frmStickyForm: TfrmStickyForm
       Height = 48
       Align = alLeft
       OnClick = sbNextClick
-      ExplicitHeight = 54
+      ExplicitLeft = 175
+      ExplicitTop = 5
     end
     object sbFullScreen: TSpeedButton
       Left = 729
