@@ -138,13 +138,13 @@ begin
   FSSLIOHandler := TIdSSLIOHandlerSocketOpenSSL.Create(nil);
   FSSLIOHandler.SSLOptions.SSLVersions := [sslvTLSv1_2]; // Можно добавить sslvTLSv1_3 для совместимости
   FSSLIOHandler.ConnectTimeout := 10000;
-  FSSLIOHandler.ReadTimeout := 10000;
+  FSSLIOHandler.ReadTimeout := 0;
 
   FIdHTTP := TIdHTTP.Create(nil);
   FIdHTTP.IOHandler := FSSLIOHandler;
   FIdHTTP.Request.UserAgent := 'Mozilla/5.0'; // Установим стандартный User-Agent
-  FIdHTTP.HandleRedirects := True; // Лучше разрешить перенаправление, если оно понадобится
-  FIdHTTP.ReadTimeout := 10000;
+  FIdHTTP.HandleRedirects := False; // Лучше разрешить перенаправление, если оно понадобится
+  FIdHTTP.ReadTimeout := 0;
 
   FStream := TMemoryStream.Create;
   FURLList := TStringList.Create;
@@ -202,7 +202,7 @@ begin
             Synchronize(
               procedure
               begin
-                ShowMessage(Format('Загрузка логотипа: %s', [TVGID]));
+                frmStickyForm.UpdateMemo(Format('Загрузка логотипа: %s', [TVGID]));
               end
             );
           end
@@ -211,7 +211,7 @@ begin
             Synchronize(
               procedure
               begin
-                ShowMessage(Format('Пустой ответ от сервера для: %s', [TVGID]));
+               frmStickyForm.UpdateMemo(Format('Пустой ответ от сервера для: %s', [TVGID]));
               end
             );
           end;
@@ -221,7 +221,7 @@ begin
             Synchronize(
               procedure
               begin
-                ShowMessage(Format('Пропущен URL из-за ошибки протокола: %s', [Line]));
+                frmStickyForm.UpdateMemo(Format('Пропущен URL из-за ошибки протокола: %s', [Line]));
               end
             );
             Continue;
@@ -231,7 +231,7 @@ begin
             Synchronize(
               procedure
               begin
-                ShowMessage(Format('Пропущен URL из-за ошибки: %s', [E.Message]));
+                frmStickyForm.UpdateMemo(Format('Пропущен URL из-за ошибки: %s', [E.Message]));
               end
             );
             Continue;
