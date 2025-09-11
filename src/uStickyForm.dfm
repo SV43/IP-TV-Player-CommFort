@@ -13,6 +13,7 @@ object frmStickyForm: TfrmStickyForm
   Font.Height = -11
   Font.Name = 'MS Sans Serif'
   Font.Style = []
+  OnClose = FormClose
   TextHeight = 13
   object Splitter1: TSplitter
     Left = 453
@@ -36,6 +37,7 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alLeft
+      Caption = #1053#1072#1079#1072#1076
       ExplicitLeft = -5
       ExplicitTop = 5
     end
@@ -45,6 +47,7 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alLeft
+      Caption = #1048#1075#1088#1072#1090#1100
       ExplicitLeft = 88
       ExplicitTop = 8
       ExplicitHeight = 22
@@ -55,6 +58,7 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alLeft
+      Caption = #1054#1089#1090#1072#1085#1086#1074#1080#1090#1100
       ExplicitHeight = 54
     end
     object sbNext: TSpeedButton
@@ -63,6 +67,7 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alLeft
+      Caption = #1057#1083#1077#1076#1091#1097#1080#1081
       OnClick = sbNextClick
       ExplicitLeft = 175
       ExplicitTop = 5
@@ -73,6 +78,8 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alRight
+      Caption = #1055#1086#1083#1085#1099#1081
+      OnClick = sbFullScreenClick
       ExplicitLeft = 762
       ExplicitHeight = 54
     end
@@ -82,8 +89,9 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alLeft
+      Caption = #1054#1090#1082#1088#1099#1090#1100
       OnClick = sbOpenClick
-      ExplicitLeft = 281
+      ExplicitLeft = 231
       ExplicitTop = 5
     end
     object tvVolume: TTrackBar
@@ -98,6 +106,7 @@ object frmStickyForm: TfrmStickyForm
       Position = 100
       TabOrder = 0
       TickStyle = tsNone
+      OnChange = tvVolumeChange
     end
   end
   object pnPlayer: TPanel
@@ -107,21 +116,6 @@ object frmStickyForm: TfrmStickyForm
     Height = 419
     Align = alClient
     TabOrder = 1
-    object iLogo: TImage
-      Left = 1
-      Top = 1
-      Width = 451
-      Height = 417
-      Align = alClient
-      Center = True
-      PopupMenu = PopupMenu1
-      Proportional = True
-      Visible = False
-      ExplicitLeft = 5
-      ExplicitTop = -1
-      ExplicitWidth = 564
-      ExplicitHeight = 414
-    end
     object VLC_Player: TPasLibVlcPlayer
       Left = 1
       Top = 1
@@ -130,16 +124,15 @@ object frmStickyForm: TfrmStickyForm
       ParentCustomHint = False
       Align = alClient
       ParentShowHint = False
-      PopupMenu = PopupMenu1
+      PopupMenu = pmMenu
       ShowHint = False
-      Visible = False
       SpuShow = False
       OsdShow = False
       AudioOutput = aoWaveOut
       SnapShotFmt = 'png'
       DeinterlaceMode = dmBLEND
+      OnMediaPlayerPlaying = VLC_PlayerMediaPlayerPlaying
       UseEvents = False
-      MouseEventsHandler = mehComponent
     end
   end
   object lbIPTVlist: TListBox
@@ -155,19 +148,12 @@ object frmStickyForm: TfrmStickyForm
     Font.Name = 'MS Sans Serif'
     Font.Style = [fsBold]
     ParentFont = False
+    PopupMenu = pmMenu
     TabOrder = 2
+    OnDblClick = lbIPTVlistDblClick
     OnDrawItem = lbIPTVlistDrawItem
   end
-  object Memo1: TMemo
-    Left = 520
-    Top = 88
-    Width = 185
-    Height = 89
-    Lines.Strings = (
-      'Memo1')
-    TabOrder = 3
-  end
-  object PopupMenu1: TPopupMenu
+  object pmMenu: TPopupMenu
     Left = 248
     Top = 256
     object C1: TMenuItem
@@ -178,9 +164,10 @@ object frmStickyForm: TfrmStickyForm
     end
     object N1: TMenuItem
       Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
+      OnClick = N1Click
     end
   end
-  object ImageList1: TImageList
+  object ilLoad: TImageList
     Left = 129
     Top = 225
     Bitmap = {
@@ -323,8 +310,12 @@ object frmStickyForm: TfrmStickyForm
       0000000000000000000000000000000000000000000000000000000000000000
       000000000000}
   end
-  object OpenDialog1: TOpenDialog
+  object odFile: TOpenDialog
     Left = 329
     Top = 217
+  end
+  object ilButton: TImageList
+    Left = 177
+    Top = 177
   end
 end

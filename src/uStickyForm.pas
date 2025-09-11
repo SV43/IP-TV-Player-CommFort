@@ -13,13 +13,12 @@ uses
   IdSSLOpenSSL, RegularExpressions, System.Net.HttpClientComponent;
 type
   TfrmStickyForm = class(TForm)
-    PopupMenu1: TPopupMenu;
+    pmMenu: TPopupMenu;
     C1: TMenuItem;
     N1: TMenuItem;
     PanelButton: TPanel;
     Splitter1: TSplitter;
     pnPlayer: TPanel;
-    iLogo: TImage;
     VLC_Player: TPasLibVlcPlayer;
     sbBack: TSpeedButton;
     sbPlay: TSpeedButton;
@@ -29,14 +28,20 @@ type
     tvVolume: TTrackBar;
     lbIPTVlist: TListBox;
     sbOpen: TSpeedButton;
-    ImageList1: TImageList;
-    OpenDialog1: TOpenDialog;
-    Memo1: TMemo;
+    ilLoad: TImageList;
+    odFile: TOpenDialog;
+    ilButton: TImageList;
     procedure C1Click(Sender: TObject);
     procedure lbIPTVlistDrawItem(Control: TWinControl; Index: Integer;
       Rect: TRect; State: TOwnerDrawState);
     procedure sbOpenClick(Sender: TObject);
     procedure sbNextClick(Sender: TObject);
+    procedure N1Click(Sender: TObject);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure sbFullScreenClick(Sender: TObject);
+    procedure tvVolumeChange(Sender: TObject);
+    procedure VLC_PlayerMediaPlayerPlaying(Sender: TObject);
+    procedure lbIPTVlistDblClick(Sender: TObject);
   private
     FParentChanName: WideString;
     FParentChanHandle: HWND;
@@ -179,7 +184,7 @@ begin
         begin
           FileName := Format('%s.png', [TVGID]);
 
-          if FileExists(FileName) then
+          if FileExists(path+'IPTV_Plugin\image\' + FileName) then
             Continue;
 
 
@@ -193,7 +198,7 @@ begin
               begin
                 // Проверяем, является ли файл настоящим PNG-изображением
                 if CheckPNGSignature(TempStream) then
-                  TempStream.SaveToFile(FileName)
+                  TempStream.SaveToFile(path+'IPTV_Plugin\image\' + FileName)
               end
             except
               on E: Exception do
@@ -235,7 +240,7 @@ begin
       // Растягиваем изображение
       BMP.Canvas.StretchDraw(Rect(0, 0, 70, 70), PNG);
 
-      Result := ImageList1.Add(BMP, nil);
+      Result := ilLoad.Add(BMP, nil);
     finally
       BMP.Free;
     end;
@@ -245,11 +250,21 @@ begin
 end;
 
 
+procedure TfrmStickyForm.N1Click(Sender: TObject);
+begin
+   Form1.Show;
+end;
+
+procedure TfrmStickyForm.FormClose(Sender: TObject; var Action: TCloseAction);
+begin
+  VLC_Player.Stop;
+end;
+
 function TfrmStickyForm.GetLogoIndexForItem(Index: Integer): Integer;
 begin
   // Здесь ваша логика получения индекса
   // Например:
-  Result := Index mod ImageList1.Count; // Простой пример
+  Result := Index mod ilLoad.Count; // Простой пример
 end;
 
 
@@ -273,6 +288,15 @@ end;
 
 
 
+procedure TfrmStickyForm.lbIPTVlistDblClick(Sender: TObject);
+begin
+ if   lbIPTVlist.Items.Count-1 >= 0 then
+ begin
+  VLC_Player.VLC.Path := Form1.dePachVLC.Text;
+//  VLC_Player.PlayNormal(lbIPTVlist.Items[lbIPTVlist.itemindex])
+ end;
+end;
+
 procedure TfrmStickyForm.lbIPTVlistDrawItem(Control: TWinControl;
   Index: Integer; Rect: TRect; State: TOwnerDrawState);
 var
@@ -287,11 +311,9 @@ begin
   Canvas := ListBox.Canvas;
 
   // Проверка наличия ImageList
-  if not Assigned(ImageList1) then
-  begin
-    ShowMessage('ImageList не назначен!');
+  if not Assigned(ilLoad) then
     Exit;
-  end;
+
 
   // Очистка области
   if odSelected in State then
@@ -308,10 +330,10 @@ begin
   LogoIndex := GetLogoIndexForItem(Index);
 
   // Проверяем корректность индекса
-  if (LogoIndex >= 0) and (LogoIndex < ImageList1.Count) then
+  if (LogoIndex >= 0) and (LogoIndex < ilLoad.Count) then
   begin
     // Рисуем изображение с проверкой размеров
-    ImageList1.Draw(
+    ilLoad.Draw(
       Canvas,
       Rect.Left + 2,
       Rect.Top + 2,
@@ -328,7 +350,7 @@ begin
 
   // Создаем прямоугольник для текста
   ItemRect := Rect;
-  ItemRect.Left := ItemRect.Left + ImageList1.Width + 10;
+  ItemRect.Left := ItemRect.Left + ilLoad.Width + 10;
   ItemRect.Top := ItemRect.Top + 2;
 
   // Разбиваем текст на строки
@@ -435,16 +457,16 @@ begin
           // Сохраняем URL логотипа для дальнейшего использования
           // (можно добавить изображения через ImageList)
           // Настройка ImageList под размер 70x70
-          ImageList1.Width :=  70;
-          ImageList1.Height := 70;
-          ImageList1.ColorDepth := cd32Bit;
+          ilLoad.Width :=  70;
+          ilLoad.Height := 70;
+          ilLoad.ColorDepth := cd32Bit;
 
           // Загрузка изображений
-          LoadPNGToImageList('C:\Program Files (x86)\CommFort\Plugins\VLC\image\No.png');
+          LoadPNGToImageList(path+'IPTV_Plugin\image\No.png');
 
            // Настройка ListBox
           lbIPTVlist.Style := lbOwnerDrawFixed;
-          lbIPTVlist.ItemHeight := ImageList1.Height + 10;
+          lbIPTVlist.ItemHeight := ilLoad.Height + 10;
 
           Inc(ItemNumber);
         finally
@@ -465,6 +487,50 @@ end;
 
 
 
+procedure TfrmStickyForm.sbFullScreenClick(Sender: TObject);
+var
+  aFullScreenForm : TFullScreenForm;
+  oldL, oldT, oldW, oldH : Integer;
+  oldA: TAlign;
+begin
+  oldL := VLC_Player.Left;
+  oldT := VLC_Player.Top;
+  oldW := VLC_Player.Width;
+  oldH := VLC_Player.Height;
+  oldA := VLC_Player.Align;
+
+  if (oldA <> alNone) then VLC_Player.Align := alNone;
+
+  aFullScreenForm := TFullScreenForm.Create(SELF);
+  aFullScreenForm.SetBounds(Monitor.Left, Monitor.Top, Monitor.Width, Monitor.Height);
+
+  {  sPanel1.Parent := aFullScreenForm.sPan;
+  sPanel1.Align:= alBottom;     }
+
+  // PasLibVlcPlayer1.ParentWindow := aFullScreenForm.Handle;
+  {$IFDEF FPC}
+    LCLIntf.SetParent(VLC_Player.Handle, aFullScreenForm.Handle);
+  {$ELSE}
+    {$IFDEF MSWINDOWS}
+      Windows.SetParent(VLC_Player.Handle, aFullScreenForm.Handle);
+    {$ENDIF}
+  {$ENDIF}
+  VLC_Player.SetBounds(0, 0, Monitor.Width, Monitor.Height);
+
+  aFullScreenForm.ShowModal;
+
+  VLC_Player.SetBounds(oldL, oldT, oldW, oldH);
+  {$IFDEF FPC}
+    LCLIntf.SetParent(VLC_Player.Handle, SELF.Handle);
+  {$ELSE}
+    {$IFDEF MSWINDOWS}
+      Windows.SetParent(VLC_Player.Handle, SELF.Handle);
+    {$ENDIF}
+  {$ENDIF}
+
+  aFullScreenForm.Free;
+end;
+
 procedure TfrmStickyForm.sbNextClick(Sender: TObject);
 begin
   with TDownloadThread.Create(Form1.edURLM3U.Text, Self) do
@@ -475,8 +541,11 @@ end;
 
 procedure TfrmStickyForm.sbOpenClick(Sender: TObject);
 begin
-  if OpenDialog1.Execute then
-    ParseM3U(OpenDialog1.FileName);
+  if odFile.Execute then
+  begin
+    ParseM3U(odFile.FileName);
+    Form1.edURLM3U.Text := odFile.FileName;
+  end;
 end;
 
 procedure TfrmStickyForm.SetParentChanHandle(const Value: HWND);
@@ -492,6 +561,17 @@ end;
 
 
 
+
+procedure TfrmStickyForm.tvVolumeChange(Sender: TObject);
+begin
+  VLC_Player.SetAudioVolume(tvVolume.Position);
+//  sLabel2.Caption:='Громкость ' + IntToStr(tvVolume.Position) + '%'
+end;
+
+procedure TfrmStickyForm.VLC_PlayerMediaPlayerPlaying(Sender: TObject);
+begin
+   VLC_Player.SetVideoAspectRatio('16:9');
+end;
 
 initialization
 
