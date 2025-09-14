@@ -4,8 +4,8 @@ object frmStickyForm: TfrmStickyForm
   BorderIcons = []
   BorderStyle = bsNone
   Caption = 'Sticky Form'
-  ClientHeight = 469
-  ClientWidth = 786
+  ClientHeight = 508
+  ClientWidth = 1108
   Color = clWhite
   DoubleBuffered = True
   Font.Charset = DEFAULT_CHARSET
@@ -15,9 +15,9 @@ object frmStickyForm: TfrmStickyForm
   Font.Style = []
   TextHeight = 13
   object Splitter1: TSplitter
-    Left = 453
+    Left = 775
     Top = 0
-    Height = 419
+    Height = 458
     Align = alRight
     ExplicitLeft = 549
     ExplicitTop = 16
@@ -25,17 +25,20 @@ object frmStickyForm: TfrmStickyForm
   end
   object PanelButton: TPanel
     Left = 0
-    Top = 419
-    Width = 786
+    Top = 458
+    Width = 1108
     Height = 50
     Align = alBottom
     TabOrder = 0
+    ExplicitTop = 419
+    ExplicitWidth = 786
     object sbBack: TSpeedButton
       Left = 1
       Top = 1
       Width = 56
       Height = 48
       Align = alLeft
+      OnClick = sbBackClick
       ExplicitLeft = -5
       ExplicitTop = 5
     end
@@ -55,6 +58,7 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alLeft
+      OnClick = sbStopClick
       ExplicitHeight = 54
     end
     object sbNext: TSpeedButton
@@ -68,11 +72,12 @@ object frmStickyForm: TfrmStickyForm
       ExplicitTop = 5
     end
     object sbFullScreen: TSpeedButton
-      Left = 729
+      Left = 1051
       Top = 1
       Width = 56
       Height = 48
       Align = alRight
+      OnClick = sbFullScreenClick
       ExplicitLeft = 762
       ExplicitHeight = 54
     end
@@ -86,9 +91,38 @@ object frmStickyForm: TfrmStickyForm
       ExplicitLeft = 281
       ExplicitTop = 5
     end
+    object lbStatus: TLabel
+      AlignWithMargins = True
+      Left = 296
+      Top = 4
+      Width = 5
+      Height = 42
+      Margins.Left = 15
+      Align = alLeft
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWindowText
+      Font.Height = -11
+      Font.Name = 'MS Sans Serif'
+      Font.Style = [fsBold]
+      ParentFont = False
+      Layout = tlCenter
+      ExplicitLeft = 281
+      ExplicitTop = 1
+      ExplicitHeight = 13
+    end
+    object sbVolume: TSpeedButton
+      Left = 995
+      Top = 1
+      Width = 56
+      Height = 48
+      Align = alRight
+      OnClick = sbVolumeClick
+      ExplicitLeft = 762
+      ExplicitHeight = 54
+    end
     object tvVolume: TTrackBar
       AlignWithMargins = True
-      Left = 547
+      Left = 813
       Top = 14
       Width = 179
       Height = 32
@@ -98,41 +132,29 @@ object frmStickyForm: TfrmStickyForm
       Position = 100
       TabOrder = 0
       TickStyle = tsNone
+      OnChange = tvVolumeChange
+      ExplicitLeft = 547
     end
   end
   object pnPlayer: TPanel
     Left = 0
     Top = 0
-    Width = 453
-    Height = 419
+    Width = 775
+    Height = 458
     Align = alClient
     TabOrder = 1
-    object iLogo: TImage
-      Left = 1
-      Top = 1
-      Width = 451
-      Height = 417
-      Align = alClient
-      Center = True
-      PopupMenu = PopupMenu1
-      Proportional = True
-      Visible = False
-      ExplicitLeft = 5
-      ExplicitTop = -1
-      ExplicitWidth = 564
-      ExplicitHeight = 414
-    end
+    ExplicitWidth = 453
+    ExplicitHeight = 419
     object VLC_Player: TPasLibVlcPlayer
       Left = 1
       Top = 1
-      Width = 451
-      Height = 417
+      Width = 773
+      Height = 456
       ParentCustomHint = False
       Align = alClient
       ParentShowHint = False
-      PopupMenu = PopupMenu1
+      PopupMenu = pmMenu
       ShowHint = False
-      Visible = False
       SpuShow = False
       OsdShow = False
       AudioOutput = aoWaveOut
@@ -140,13 +162,15 @@ object frmStickyForm: TfrmStickyForm
       DeinterlaceMode = dmBLEND
       UseEvents = False
       MouseEventsHandler = mehComponent
+      ExplicitLeft = -1
+      ExplicitTop = -3
     end
   end
   object lbIPTVlist: TListBox
-    Left = 456
+    Left = 778
     Top = 0
     Width = 330
-    Height = 419
+    Height = 458
     Style = lbOwnerDrawVariable
     Align = alRight
     Font.Charset = DEFAULT_CHARSET
@@ -155,19 +179,14 @@ object frmStickyForm: TfrmStickyForm
     Font.Name = 'MS Sans Serif'
     Font.Style = [fsBold]
     ParentFont = False
+    PopupMenu = pmMenu
     TabOrder = 2
+    OnDblClick = lbIPTVlistDblClick
     OnDrawItem = lbIPTVlistDrawItem
+    ExplicitLeft = 456
+    ExplicitHeight = 419
   end
-  object Memo1: TMemo
-    Left = 520
-    Top = 88
-    Width = 185
-    Height = 89
-    Lines.Strings = (
-      'Memo1')
-    TabOrder = 3
-  end
-  object PopupMenu1: TPopupMenu
+  object pmMenu: TPopupMenu
     Left = 248
     Top = 256
     object C1: TMenuItem
@@ -178,9 +197,10 @@ object frmStickyForm: TfrmStickyForm
     end
     object N1: TMenuItem
       Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
+      OnClick = N1Click
     end
   end
-  object ImageList1: TImageList
+  object ilChanel: TImageList
     Left = 129
     Top = 225
     Bitmap = {
@@ -323,8 +343,13 @@ object frmStickyForm: TfrmStickyForm
       0000000000000000000000000000000000000000000000000000000000000000
       000000000000}
   end
-  object OpenDialog1: TOpenDialog
+  object odFile: TOpenDialog
     Left = 329
     Top = 217
+  end
+  object tStatus: TTimer
+    OnTimer = tStatusTimer
+    Left = 433
+    Top = 257
   end
 end
