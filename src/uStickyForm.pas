@@ -28,32 +28,51 @@ type
     tvVolume: TTrackBar;
     lbIPTVlist: TListBox;
     sbOpen: TSpeedButton;
+<<<<<<< HEAD
     ilLoad: TImageList;
     odFile: TOpenDialog;
     ilButton: TImageList;
+=======
+    ilChanel: TImageList;
+    odFile: TOpenDialog;
+    lbStatus: TLabel;
+    tStatus: TTimer;
+    sbVolume: TSpeedButton;
+>>>>>>> main
     procedure C1Click(Sender: TObject);
     procedure lbIPTVlistDrawItem(Control: TWinControl; Index: Integer;
       Rect: TRect; State: TOwnerDrawState);
     procedure sbOpenClick(Sender: TObject);
     procedure sbNextClick(Sender: TObject);
+<<<<<<< HEAD
     procedure N1Click(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure sbFullScreenClick(Sender: TObject);
     procedure tvVolumeChange(Sender: TObject);
     procedure VLC_PlayerMediaPlayerPlaying(Sender: TObject);
     procedure lbIPTVlistDblClick(Sender: TObject);
+=======
+    procedure sbBackClick(Sender: TObject);
+    procedure sbStopClick(Sender: TObject);
+    procedure tvVolumeChange(Sender: TObject);
+    procedure tStatusTimer(Sender: TObject);
+    procedure sbFullScreenClick(Sender: TObject);
+    procedure sbVolumeClick(Sender: TObject);
+    procedure lbIPTVlistDblClick(Sender: TObject);
+    procedure N1Click(Sender: TObject);
+>>>>>>> main
   private
     FParentChanName: WideString;
     FParentChanHandle: HWND;
     procedure SetParentChanName(const Value: WideString);
     procedure SetParentChanHandle(const Value: HWND);
     { Private declarations }
-    procedure ParseM3U(const FileName: string);
     function LoadPNGToImageList(const AFileName: string): Integer;
     function GetLogoIndexForItem(Index: Integer): Integer;
   public
     property ParentChanName   : WideString read FParentChanName write SetParentChanName;
     property ParentChanHandle : HWND read FParentChanHandle write SetParentChanHandle;
+    procedure ParseM3U(const FileName: string);
 
     { Public declarations }
   end;
@@ -232,15 +251,19 @@ begin
     BMP := TBitmap.Create;
     try
       // Устанавливаем размер 50x50
-      BMP.Width := 70;
-      BMP.Height := 70;
+      BMP.Width := 50;
+      BMP.Height := 50;
       BMP.PixelFormat := pf32bit;
       BMP.AlphaFormat := afDefined;
 
       // Растягиваем изображение
-      BMP.Canvas.StretchDraw(Rect(0, 0, 70, 70), PNG);
+      BMP.Canvas.StretchDraw(Rect(0, 0, 49, 49), PNG);
 
+<<<<<<< HEAD
       Result := ilLoad.Add(BMP, nil);
+=======
+      Result := ilChanel.Add(BMP, nil);
+>>>>>>> main
     finally
       BMP.Free;
     end;
@@ -252,19 +275,27 @@ end;
 
 procedure TfrmStickyForm.N1Click(Sender: TObject);
 begin
+<<<<<<< HEAD
    Form1.Show;
 end;
 
 procedure TfrmStickyForm.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
   VLC_Player.Stop;
+=======
+  Form1.Show;
+>>>>>>> main
 end;
 
 function TfrmStickyForm.GetLogoIndexForItem(Index: Integer): Integer;
 begin
   // Здесь ваша логика получения индекса
   // Например:
+<<<<<<< HEAD
   Result := Index mod ilLoad.Count; // Простой пример
+=======
+  Result := Index mod ilChanel.Count; // Простой пример
+>>>>>>> main
 end;
 
 
@@ -289,12 +320,35 @@ end;
 
 
 procedure TfrmStickyForm.lbIPTVlistDblClick(Sender: TObject);
+<<<<<<< HEAD
 begin
  if   lbIPTVlist.Items.Count-1 >= 0 then
  begin
   VLC_Player.VLC.Path := Form1.dePachVLC.Text;
 //  VLC_Player.PlayNormal(lbIPTVlist.Items[lbIPTVlist.itemindex])
  end;
+=======
+var
+  ItemText: string;
+  PosURL: Integer;
+begin
+  try
+    ItemText := lbIPTVlist.Items[lbIPTVlist.ItemIndex];
+    PosURL := Pos('URL:', ItemText);
+
+    if PosURL > 0 then
+    begin
+      lbStatus.caption:=(Copy(ItemText, PosURL + Length('URL:') + 1, Length(ItemText)));
+      VLC_Player.VLC.Path := Form1.dePachVLC.Text;
+      VLC_Player.Play(Copy(ItemText, PosURL + Length('URL:') + 1, Length(ItemText)));
+    end
+    else
+      lbStatus.caption:='URL не найден';
+  except
+    on E: Exception do
+      lbStatus.caption := 'Ошибка: ' + E.Message;
+  end;
+>>>>>>> main
 end;
 
 procedure TfrmStickyForm.lbIPTVlistDrawItem(Control: TWinControl;
@@ -311,7 +365,13 @@ begin
   Canvas := ListBox.Canvas;
 
   // Проверка наличия ImageList
+<<<<<<< HEAD
   if not Assigned(ilLoad) then
+=======
+  if not Assigned(ilChanel) then
+  begin
+    ShowMessage('ImageList не назначен!');
+>>>>>>> main
     Exit;
 
 
@@ -330,10 +390,17 @@ begin
   LogoIndex := GetLogoIndexForItem(Index);
 
   // Проверяем корректность индекса
+<<<<<<< HEAD
   if (LogoIndex >= 0) and (LogoIndex < ilLoad.Count) then
   begin
     // Рисуем изображение с проверкой размеров
     ilLoad.Draw(
+=======
+  if (LogoIndex >= 0) and (LogoIndex < ilChanel.Count) then
+  begin
+    // Рисуем изображение с проверкой размеров
+    ilChanel.Draw(
+>>>>>>> main
       Canvas,
       Rect.Left + 2,
       Rect.Top + 2,
@@ -350,7 +417,11 @@ begin
 
   // Создаем прямоугольник для текста
   ItemRect := Rect;
+<<<<<<< HEAD
   ItemRect.Left := ItemRect.Left + ilLoad.Width + 10;
+=======
+  ItemRect.Left := ItemRect.Left + ilChanel.Width + 10;
+>>>>>>> main
   ItemRect.Top := ItemRect.Top + 2;
 
   // Разбиваем текст на строки
@@ -457,16 +528,26 @@ begin
           // Сохраняем URL логотипа для дальнейшего использования
           // (можно добавить изображения через ImageList)
           // Настройка ImageList под размер 70x70
+<<<<<<< HEAD
           ilLoad.Width :=  70;
           ilLoad.Height := 70;
           ilLoad.ColorDepth := cd32Bit;
+=======
+          ilChanel.Width :=  50;
+          ilChanel.Height := 50;
+          ilChanel.ColorDepth := cd32Bit;
+>>>>>>> main
 
           // Загрузка изображений
           LoadPNGToImageList(path+'IPTV_Plugin\image\No.png');
 
            // Настройка ListBox
           lbIPTVlist.Style := lbOwnerDrawFixed;
+<<<<<<< HEAD
           lbIPTVlist.ItemHeight := ilLoad.Height + 10;
+=======
+          lbIPTVlist.ItemHeight := ilChanel.Height + 10;
+>>>>>>> main
 
           Inc(ItemNumber);
         finally
@@ -486,6 +567,70 @@ end;
 
 
 
+
+<<<<<<< HEAD
+procedure TfrmStickyForm.sbFullScreenClick(Sender: TObject);
+var
+  aFullScreenForm : TFullScreenForm;
+  oldL, oldT, oldW, oldH : Integer;
+  oldA: TAlign;
+begin
+  oldL := VLC_Player.Left;
+  oldT := VLC_Player.Top;
+  oldW := VLC_Player.Width;
+  oldH := VLC_Player.Height;
+  oldA := VLC_Player.Align;
+
+  if (oldA <> alNone) then VLC_Player.Align := alNone;
+
+  aFullScreenForm := TFullScreenForm.Create(SELF);
+  aFullScreenForm.SetBounds(Monitor.Left, Monitor.Top, Monitor.Width, Monitor.Height);
+
+  {  sPanel1.Parent := aFullScreenForm.sPan;
+  sPanel1.Align:= alBottom;     }
+
+  // PasLibVlcPlayer1.ParentWindow := aFullScreenForm.Handle;
+  {$IFDEF FPC}
+    LCLIntf.SetParent(VLC_Player.Handle, aFullScreenForm.Handle);
+  {$ELSE}
+    {$IFDEF MSWINDOWS}
+      Windows.SetParent(VLC_Player.Handle, aFullScreenForm.Handle);
+    {$ENDIF}
+  {$ENDIF}
+  VLC_Player.SetBounds(0, 0, Monitor.Width, Monitor.Height);
+
+  aFullScreenForm.ShowModal;
+
+  VLC_Player.SetBounds(oldL, oldT, oldW, oldH);
+  {$IFDEF FPC}
+    LCLIntf.SetParent(VLC_Player.Handle, SELF.Handle);
+  {$ELSE}
+    {$IFDEF MSWINDOWS}
+      Windows.SetParent(VLC_Player.Handle, SELF.Handle);
+    {$ENDIF}
+  {$ENDIF}
+
+  aFullScreenForm.Free;
+end;
+
+procedure TfrmStickyForm.sbNextClick(Sender: TObject);
+=======
+procedure TfrmStickyForm.sbBackClick(Sender: TObject);
+var
+  ItemText: string;
+  PosURL: Integer;
+>>>>>>> main
+begin
+    ItemText := lbIPTVlist.Items[lbIPTVlist.ItemIndex -1];
+    PosURL := Pos('URL:', ItemText);
+
+    if PosURL > 0 then
+    begin
+      lbStatus.caption:=(Copy(ItemText, PosURL + Length('URL:') + 1, Length(ItemText)));
+      VLC_Player.VLC.Path := Form1.dePachVLC.Text;
+      VLC_Player.Play(Copy(ItemText, PosURL + Length('URL:') + 1, Length(ItemText)));
+    end;
+end;
 
 procedure TfrmStickyForm.sbFullScreenClick(Sender: TObject);
 var
@@ -532,11 +677,20 @@ begin
 end;
 
 procedure TfrmStickyForm.sbNextClick(Sender: TObject);
+var
+  ItemText: string;
+  PosURL: Integer;
 begin
-  with TDownloadThread.Create(Form1.edURLM3U.Text, Self) do
-  begin
-    Start;
-  end;
+
+    ItemText := lbIPTVlist.Items[lbIPTVlist.ItemIndex +1];
+    PosURL := Pos('URL:', ItemText);
+
+    if PosURL > 0 then
+    begin
+      lbStatus.caption:=(Copy(ItemText, PosURL + Length('URL:') + 1, Length(ItemText)));
+      VLC_Player.VLC.Path := Form1.dePachVLC.Text;
+      VLC_Player.Play(Copy(ItemText, PosURL + Length('URL:') + 1, Length(ItemText)));
+    end;
 end;
 
 procedure TfrmStickyForm.sbOpenClick(Sender: TObject);
@@ -546,6 +700,28 @@ begin
     ParseM3U(odFile.FileName);
     Form1.edURLM3U.Text := odFile.FileName;
   end;
+<<<<<<< HEAD
+=======
+end;
+
+procedure TfrmStickyForm.sbStopClick(Sender: TObject);
+begin
+   VLC_Player.Stop();
+end;
+
+procedure TfrmStickyForm.sbVolumeClick(Sender: TObject);
+begin
+ if   VLC_Player.GetAudioVolume()= 0 then
+ begin
+   VLC_Player.SetAudioVolume(tvVolume.Position);
+   lbStatus.Caption:= 'Громкость ' + IntToStr(tvVolume.Position) + '%';
+ end
+     else
+   begin
+     VLC_Player.SetAudioVolume(0);
+     lbStatus.Caption:='Звук отключен'
+   end;
+>>>>>>> main
 end;
 
 procedure TfrmStickyForm.SetParentChanHandle(const Value: HWND);
@@ -562,6 +738,7 @@ end;
 
 
 
+<<<<<<< HEAD
 procedure TfrmStickyForm.tvVolumeChange(Sender: TObject);
 begin
   VLC_Player.SetAudioVolume(tvVolume.Position);
@@ -571,6 +748,35 @@ end;
 procedure TfrmStickyForm.VLC_PlayerMediaPlayerPlaying(Sender: TObject);
 begin
    VLC_Player.SetVideoAspectRatio('16:9');
+=======
+procedure TfrmStickyForm.tStatusTimer(Sender: TObject);
+var
+  stateName: string;
+begin
+
+  case VLC_Player.GetState() of
+    plvPlayer_NothingSpecial: stateName := '';
+    plvPlayer_Opening:        stateName := 'Открытие потока';
+    plvPlayer_Buffering:      stateName := 'Буфирация';
+//    plvPlayer_Playing:        stateName :=  TVProgramm;
+    plvPlayer_Paused:         stateName := 'Пауза';
+    plvPlayer_Stopped:        stateName := 'Остановлено';
+    plvPlayer_Ended:          stateName := '';
+    plvPlayer_Error:          stateName := 'Ошибка загрузки потока';
+    else                      stateName := '';
+  end;
+
+  if stateName = '' then
+   else
+     lbStatus.caption:=(stateName);
+
+end;
+
+procedure TfrmStickyForm.tvVolumeChange(Sender: TObject);
+begin
+  VLC_Player.SetAudioVolume(tvVolume.Position);
+  lbStatus.Caption := 'Громкость ' + IntToStr(tvVolume.Position) + '%'
+>>>>>>> main
 end;
 
 initialization

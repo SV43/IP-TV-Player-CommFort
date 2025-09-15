@@ -148,6 +148,10 @@ begin
     reenter;
     StickyChanName := Form1.cbIPTVchan.Text;
 
+    // Если файл существует грузим список каналов
+    if FileExists(Form1.edURLM3U.Text) then
+      frmStickyForm.ParseM3U(Form1.edURLM3U.Text);
+
     // Установка таймера
     setTimer(0, 1, TIMER_INTERVAL, @Refrash_Form);
 
