@@ -13,6 +13,7 @@ object frmStickyForm: TfrmStickyForm
   Font.Height = -11
   Font.Name = 'MS Sans Serif'
   Font.Style = []
+  OnCreate = FormCreate
   TextHeight = 13
   object Splitter1: TSplitter
     Left = 775
@@ -30,14 +31,15 @@ object frmStickyForm: TfrmStickyForm
     Height = 50
     Align = alBottom
     TabOrder = 0
-    ExplicitTop = 419
-    ExplicitWidth = 786
     object sbBack: TSpeedButton
       Left = 1
       Top = 1
       Width = 56
       Height = 48
       Align = alLeft
+      ImageIndex = 4
+      HotImageIndex = 0
+      Flat = True
       OnClick = sbBackClick
       ExplicitLeft = -5
       ExplicitTop = 5
@@ -48,6 +50,7 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alLeft
+      Flat = True
       ExplicitLeft = 88
       ExplicitTop = 8
       ExplicitHeight = 22
@@ -58,6 +61,7 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alLeft
+      Flat = True
       OnClick = sbStopClick
       ExplicitHeight = 54
     end
@@ -67,6 +71,7 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alLeft
+      Flat = True
       OnClick = sbNextClick
       ExplicitLeft = 175
       ExplicitTop = 5
@@ -77,6 +82,7 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alRight
+      Flat = True
       OnClick = sbFullScreenClick
       ExplicitLeft = 762
       ExplicitHeight = 54
@@ -87,6 +93,7 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alLeft
+      Flat = True
       OnClick = sbOpenClick
       ExplicitLeft = 281
       ExplicitTop = 5
@@ -106,8 +113,6 @@ object frmStickyForm: TfrmStickyForm
       Font.Style = [fsBold]
       ParentFont = False
       Layout = tlCenter
-      ExplicitLeft = 281
-      ExplicitTop = 1
       ExplicitHeight = 13
     end
     object sbVolume: TSpeedButton
@@ -116,6 +121,7 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alRight
+      Flat = True
       OnClick = sbVolumeClick
       ExplicitLeft = 762
       ExplicitHeight = 54
@@ -133,7 +139,6 @@ object frmStickyForm: TfrmStickyForm
       TabOrder = 0
       TickStyle = tsNone
       OnChange = tvVolumeChange
-      ExplicitLeft = 547
     end
   end
   object pnPlayer: TPanel
@@ -143,8 +148,6 @@ object frmStickyForm: TfrmStickyForm
     Height = 458
     Align = alClient
     TabOrder = 1
-    ExplicitWidth = 453
-    ExplicitHeight = 419
     object VLC_Player: TPasLibVlcPlayer
       Left = 1
       Top = 1
@@ -162,8 +165,6 @@ object frmStickyForm: TfrmStickyForm
       DeinterlaceMode = dmBLEND
       UseEvents = False
       MouseEventsHandler = mehComponent
-      ExplicitLeft = -1
-      ExplicitTop = -3
     end
   end
   object lbIPTVlist: TListBox
@@ -183,8 +184,6 @@ object frmStickyForm: TfrmStickyForm
     TabOrder = 2
     OnDblClick = lbIPTVlistDblClick
     OnDrawItem = lbIPTVlistDrawItem
-    ExplicitLeft = 456
-    ExplicitHeight = 419
   end
   object pmMenu: TPopupMenu
     Left = 248
@@ -198,6 +197,9 @@ object frmStickyForm: TfrmStickyForm
     object N1: TMenuItem
       Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
       OnClick = N1Click
+    end
+    object N1231: TMenuItem
+      Caption = '123'
     end
   end
   object ilChanel: TImageList

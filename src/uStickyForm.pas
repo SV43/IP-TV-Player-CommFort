@@ -10,7 +10,7 @@ uses
   Vcl.ExtDlgs,
   IdBaseComponent, IdComponent, IdTCPConnection,
   IdTCPClient, IdHTTP, System.ImageList, PasLibVlcPlayerUnit, Vcl.ImgList,
-  IdSSLOpenSSL, RegularExpressions, System.Net.HttpClientComponent;
+  IdSSLOpenSSL, RegularExpressions, System.Net.HttpClientComponent, System.Math;
 type
   TfrmStickyForm = class(TForm)
     pmMenu: TPopupMenu;
@@ -33,6 +33,7 @@ type
     lbStatus: TLabel;
     tStatus: TTimer;
     sbVolume: TSpeedButton;
+    N1231: TMenuItem;
     procedure C1Click(Sender: TObject);
     procedure lbIPTVlistDrawItem(Control: TWinControl; Index: Integer;
       Rect: TRect; State: TOwnerDrawState);
@@ -46,6 +47,7 @@ type
     procedure sbVolumeClick(Sender: TObject);
     procedure lbIPTVlistDblClick(Sender: TObject);
     procedure N1Click(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
   private
     FParentChanName: WideString;
     FParentChanHandle: HWND;
@@ -81,6 +83,7 @@ type
 var
   frmStickyForm : TfrmStickyForm;
   ImageList: TImageList;
+
 
 
 
@@ -170,7 +173,6 @@ var
 begin
   FNetHTTPClient := TNetHTTPClient.Create(nil); // Клиент остаётся общим
   FURLList := TStringList.Create;
-
   try
     FURLList.LoadFromFile(FFileName);
 
@@ -202,7 +204,7 @@ begin
               begin
                 // Проверяем, является ли файл настоящим PNG-изображением
                 if CheckPNGSignature(TempStream) then
-                  TempStream.SaveToFile(FileName)
+                  TempStream.SaveToFile(FileName);
               end
             except
               on E: Exception do
@@ -254,9 +256,91 @@ begin
 end;
 
 
+procedure LoadPNGToControl(const FileName: string; Control: TControl);
+var
+  PNG: TPngImage;
+  Bmp: TBitmap;
+  ImageList: TImageList;
+  Index: Integer;
+begin
+  if not Assigned(Control) then
+    raise Exception.Create('Компонент не определен');
+
+  PNG := TPngImage.Create;
+  try
+    PNG.LoadFromFile(FileName);
+
+    Bmp := TBitmap.Create;
+    try
+      Bmp.Width := Control.Width;
+      Bmp.Height := Control.Height;
+
+      Bmp.Canvas.Brush.Color := clWhite;
+      Bmp.Canvas.FillRect(Rect(0, 0, Bmp.Width, Bmp.Height));
+
+      // Расчет пропорций
+      var ScaleX := Bmp.Width / PNG.Width;
+      var ScaleY := Bmp.Height / PNG.Height;
+      var Scale := Min(ScaleX, ScaleY);
+
+      var NewWidth := Round(PNG.Width * Scale);
+      var NewHeight := Round(PNG.Height * Scale);
+
+      var X := (Bmp.Width - NewWidth) div 2;
+      var Y := (Bmp.Height - NewHeight) div 2;
+
+      Bmp.Canvas.StretchDraw(
+        Rect(X, Y, X + NewWidth, Y + NewHeight),
+        PNG
+      );
+
+      // Обработка разных типов компонентов
+      if Control is TBitBtn then
+      begin
+        (Control as TBitBtn).Glyph.Assign(Bmp);
+      end
+      else if Control is TSpeedButton then
+      begin
+        (Control as TSpeedButton).Glyph.Assign(Bmp);
+      end
+      else if Control is TButton then
+      begin
+        // Создаем временный ImageList для TButton
+        ImageList := TImageList.Create(nil);
+        try
+          ImageList.Width := Control.Width;
+          ImageList.Height := Control.Height;
+          Index := ImageList.Add(Bmp, nil);
+          (Control as TButton).Images := ImageList;
+          (Control as TButton).ImageIndex := Index;
+        finally
+          ImageList.Free;
+        end;
+      end;
+    finally
+      Bmp.Free;
+    end;
+  finally
+    PNG.Free;
+  end;
+end;
+
+
+
 procedure TfrmStickyForm.N1Click(Sender: TObject);
 begin
   Form1.Show;
+end;
+
+procedure TfrmStickyForm.FormCreate(Sender: TObject);
+begin
+    LoadPNGToControl(path+'IPTV_Plugin\button\backward.png', sbBack);
+    LoadPNGToControl(path+'IPTV_Plugin\button\screen-full.png', sbFullScreen);
+    LoadPNGToControl(path+'IPTV_Plugin\button\forwards.png', sbNext);
+    LoadPNGToControl(path+'IPTV_Plugin\button\film-list.png', sbOpen);
+    LoadPNGToControl(path+'IPTV_Plugin\button\play.png', sbPlay);
+    LoadPNGToControl(path+'IPTV_Plugin\button\stop-playing.png', sbStop);
+    LoadPNGToControl(path+'IPTV_Plugin\button\volume-mute.png', sbVolume);
 end;
 
 function TfrmStickyForm.GetLogoIndexForItem(Index: Integer): Integer;
@@ -409,6 +493,11 @@ begin
   lbIPTVlist.Clear;
   ItemNumber := 1;
 
+{  with TDownloadThread.Create(Form1.edURLM3U.Text, Self) do
+  begin
+      Start; // Стартуем поток
+  end;   }
+
   List := TStringList.Create;
   try
     try
@@ -477,7 +566,7 @@ begin
           ilChanel.ColorDepth := cd32Bit;
 
           // Загрузка изображений
-          LoadPNGToImageList('C:\Program Files (x86)\CommFort\Plugins\VLC\image\No.png');
+          LoadPNGToImageList(path+'IPTV_Plugin\image\No.png');
 
            // Настройка ListBox
           lbIPTVlist.Style := lbOwnerDrawFixed;
