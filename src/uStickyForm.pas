@@ -623,7 +623,7 @@ begin
 
   // Создаем прямоугольник для текста
   ItemRect := Rect;
-  ItemRect.Left := ItemRect.Left + 54; // 70 (ширина лого) + 4 пикселя отступа
+  ItemRect.Left := ItemRect.Left + 54; // 50 (ширина лого) + 4 пикселя отступа
   ItemRect.Top := ItemRect.Top + 2;
 
   // Разбиваем текст на строки

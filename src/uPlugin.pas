@@ -70,8 +70,8 @@ var
  ini: TIniFile;
 begin
   Ini:=TiniFile.Create(path+'IPTV_Plugin\IPTV_Plug.ini');
-  Form1.dePachVLC.Text:=Ini.ReadString('Setings', 'VideoLan VLC Dll',ExtractFileDir(ParamStr(0))+'\Plugins\VLC');
-  Form1.lePachStyle.Text:=Ini.ReadString('Setings', 'Style', ExtractFileDir(ParamStr(0))+'IPTV_Plugin\style\');
+  Form1.dePachVLC.Text:=Ini.ReadString('Setings', 'VideoLan VLC Dll',ExtractFileDir(ParamStr(0))+'\Plugins\IPTV_Plugin\VLC');
+  Form1.lePachStyle.Text:=Ini.ReadString('Setings', 'Style', ExtractFileDir(ParamStr(0))+'\Plugins\IPTV_Plugin\style');
   Form1.cbIPTVchan.Text:=Ini.ReadString('Setings', 'Chann IPTV Plug','IP-TV');
   Form1.edURLM3U.Text:=Ini.ReadString('Setings', 'URL M3U','https://site.ru/iptv.m3u');
   Form1.edURLJTV.Text:=Ini.ReadString('Setings', 'URL JTV','https://site.ru/jtv.zip2');
