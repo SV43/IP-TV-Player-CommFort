@@ -13,7 +13,7 @@ object frmStickyForm: TfrmStickyForm
   Font.Height = -11
   Font.Name = 'MS Sans Serif'
   Font.Style = []
-  OnClose = FormClose
+  OnCreate = FormCreate
   TextHeight = 13
   object Splitter1: TSplitter
     Left = 775
@@ -31,19 +31,16 @@ object frmStickyForm: TfrmStickyForm
     Height = 50
     Align = alBottom
     TabOrder = 0
-    ExplicitTop = 419
-    ExplicitWidth = 786
     object sbBack: TSpeedButton
       Left = 1
       Top = 1
       Width = 56
       Height = 48
       Align = alLeft
-<<<<<<< HEAD
-      Caption = #1053#1072#1079#1072#1076
-=======
+      ImageIndex = 4
+      HotImageIndex = 0
+      Flat = True
       OnClick = sbBackClick
->>>>>>> main
       ExplicitLeft = -5
       ExplicitTop = 5
     end
@@ -53,7 +50,7 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alLeft
-      Caption = #1048#1075#1088#1072#1090#1100
+      Flat = True
       ExplicitLeft = 88
       ExplicitTop = 8
       ExplicitHeight = 22
@@ -64,11 +61,8 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alLeft
-<<<<<<< HEAD
-      Caption = #1054#1089#1090#1072#1085#1086#1074#1080#1090#1100
-=======
+      Flat = True
       OnClick = sbStopClick
->>>>>>> main
       ExplicitHeight = 54
     end
     object sbNext: TSpeedButton
@@ -77,7 +71,7 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alLeft
-      Caption = #1057#1083#1077#1076#1091#1097#1080#1081
+      Flat = True
       OnClick = sbNextClick
       ExplicitLeft = 175
       ExplicitTop = 5
@@ -88,10 +82,7 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alRight
-<<<<<<< HEAD
-      Caption = #1055#1086#1083#1085#1099#1081
-=======
->>>>>>> main
+      Flat = True
       OnClick = sbFullScreenClick
       ExplicitLeft = 762
       ExplicitHeight = 54
@@ -102,9 +93,9 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alLeft
-      Caption = #1054#1090#1082#1088#1099#1090#1100
+      Flat = True
       OnClick = sbOpenClick
-      ExplicitLeft = 231
+      ExplicitLeft = 281
       ExplicitTop = 5
     end
     object lbStatus: TLabel
@@ -122,8 +113,6 @@ object frmStickyForm: TfrmStickyForm
       Font.Style = [fsBold]
       ParentFont = False
       Layout = tlCenter
-      ExplicitLeft = 281
-      ExplicitTop = 1
       ExplicitHeight = 13
     end
     object sbVolume: TSpeedButton
@@ -132,6 +121,7 @@ object frmStickyForm: TfrmStickyForm
       Width = 56
       Height = 48
       Align = alRight
+      Flat = True
       OnClick = sbVolumeClick
       ExplicitLeft = 762
       ExplicitHeight = 54
@@ -149,10 +139,6 @@ object frmStickyForm: TfrmStickyForm
       TabOrder = 0
       TickStyle = tsNone
       OnChange = tvVolumeChange
-<<<<<<< HEAD
-=======
-      ExplicitLeft = 547
->>>>>>> main
     end
   end
   object pnPlayer: TPanel
@@ -162,11 +148,6 @@ object frmStickyForm: TfrmStickyForm
     Height = 458
     Align = alClient
     TabOrder = 1
-<<<<<<< HEAD
-=======
-    ExplicitWidth = 453
-    ExplicitHeight = 419
->>>>>>> main
     object VLC_Player: TPasLibVlcPlayer
       Left = 1
       Top = 1
@@ -182,14 +163,8 @@ object frmStickyForm: TfrmStickyForm
       AudioOutput = aoWaveOut
       SnapShotFmt = 'png'
       DeinterlaceMode = dmBLEND
-      OnMediaPlayerPlaying = VLC_PlayerMediaPlayerPlaying
       UseEvents = False
-<<<<<<< HEAD
-=======
       MouseEventsHandler = mehComponent
-      ExplicitLeft = -1
-      ExplicitTop = -3
->>>>>>> main
     end
   end
   object lbIPTVlist: TListBox
@@ -209,8 +184,6 @@ object frmStickyForm: TfrmStickyForm
     TabOrder = 2
     OnDblClick = lbIPTVlistDblClick
     OnDrawItem = lbIPTVlistDrawItem
-    ExplicitLeft = 456
-    ExplicitHeight = 419
   end
   object pmMenu: TPopupMenu
     Left = 248
@@ -225,12 +198,11 @@ object frmStickyForm: TfrmStickyForm
       Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
       OnClick = N1Click
     end
+    object N1231: TMenuItem
+      Caption = '123'
+    end
   end
-<<<<<<< HEAD
-  object ilLoad: TImageList
-=======
   object ilChanel: TImageList
->>>>>>> main
     Left = 129
     Top = 225
     Bitmap = {
@@ -377,15 +349,9 @@ object frmStickyForm: TfrmStickyForm
     Left = 329
     Top = 217
   end
-<<<<<<< HEAD
-  object ilButton: TImageList
-    Left = 177
-    Top = 177
-=======
   object tStatus: TTimer
     OnTimer = tStatusTimer
     Left = 433
     Top = 257
->>>>>>> main
   end
 end
