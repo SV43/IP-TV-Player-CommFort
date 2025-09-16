@@ -1,4 +1,4 @@
-unit uStickyForm;
+п»їunit uStickyForm;
 
 interface
 
@@ -96,21 +96,21 @@ uses FullScreenFormUnit, uPlugin, Unit1;
 
 
 
-// Функция извлечения значения атрибута tvg-id из строки
+// Р¤СѓРЅРєС†РёСЏ РёР·РІР»РµС‡РµРЅРёСЏ Р·РЅР°С‡РµРЅРёСЏ Р°С‚СЂРёР±СѓС‚Р° tvg-id РёР· СЃС‚СЂРѕРєРё
 function ExtractTVGID(const Line: string): string;
 var
   RegEx: TRegEx;
   Match: TMatch;
 begin
-  RegEx := TRegEx.Create('tvg-id="([^"]+)"'); // Регулярное выражение для парсинга
+  RegEx := TRegEx.Create('tvg-id="([^"]+)"'); // Р РµРіСѓР»СЏСЂРЅРѕРµ РІС‹СЂР°Р¶РµРЅРёРµ РґР»СЏ РїР°СЂСЃРёРЅРіР°
   Match := RegEx.Match(Line);
   if Match.Success then
-    Result := Match.Groups[1].Value // Получаем значение первого захвата группы
+    Result := Match.Groups[1].Value // РџРѕР»СѓС‡Р°РµРј Р·РЅР°С‡РµРЅРёРµ РїРµСЂРІРѕРіРѕ Р·Р°С…РІР°С‚Р° РіСЂСѓРїРїС‹
   else
-    Result := ''; // Если совпадение не найдено, возвращаем пустую строку
+    Result := ''; // Р•СЃР»Рё СЃРѕРІРїР°РґРµРЅРёРµ РЅРµ РЅР°Р№РґРµРЅРѕ, РІРѕР·РІСЂР°С‰Р°РµРј РїСѓСЃС‚СѓСЋ СЃС‚СЂРѕРєСѓ
 end;
 
-// Проверка сигнатуры PNG-файла
+// РџСЂРѕРІРµСЂРєР° СЃРёРіРЅР°С‚СѓСЂС‹ PNG-С„Р°Р№Р»Р°
 function CheckPNGSignature(Stream: TStream): Boolean;
 const
   PNG_SIGNATURE: array[0..7] of Byte = ($89, $50, $4E, $47, $0D, $0A, $1A, $0A);
@@ -120,20 +120,20 @@ var
 begin
   Result := False;
 
-  // Сохраняем оригинальную позицию потока
+  // РЎРѕС…СЂР°РЅСЏРµРј РѕСЂРёРіРёРЅР°Р»СЊРЅСѓСЋ РїРѕР·РёС†РёСЋ РїРѕС‚РѕРєР°
   var OldPos := Stream.Position;
 
   try
-    // Перемещаемся в начало потока
+    // РџРµСЂРµРјРµС‰Р°РµРјСЃСЏ РІ РЅР°С‡Р°Р»Рѕ РїРѕС‚РѕРєР°
     Stream.Position := 0;
 
-    // Чтение первых восьми байтов
+    // Р§С‚РµРЅРёРµ РїРµСЂРІС‹С… РІРѕСЃСЊРјРё Р±Р°Р№С‚РѕРІ
     BytesRead := Stream.Read(SignatureBytes, SizeOf(PNG_SIGNATURE));
 
-    // Восстанавливаем позицию потока обратно
+    // Р’РѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµРј РїРѕР·РёС†РёСЋ РїРѕС‚РѕРєР° РѕР±СЂР°С‚РЅРѕ
     Stream.Position := OldPos;
 
-    // Проверяем совпадение сигнатуры
+    // РџСЂРѕРІРµСЂСЏРµРј СЃРѕРІРїР°РґРµРЅРёРµ СЃРёРіРЅР°С‚СѓСЂС‹
     Result := (BytesRead = SizeOf(PNG_SIGNATURE)) and CompareMem(@SignatureBytes, @PNG_SIGNATURE, SizeOf(PNG_SIGNATURE));
   except
     on E: Exception do
@@ -143,24 +143,24 @@ begin
   end;
 end;
 
-// Конструктор потока загрузки
+// РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ РїРѕС‚РѕРєР° Р·Р°РіСЂСѓР·РєРё
 constructor TDownloadThread.Create(const FileName: string; Form: TfrmStickyForm);
 begin
-  inherited Create(True); // Создаем поток приостановленным
-  FreeOnTerminate := True; // Освобождать автоматически при завершении
+  inherited Create(True); // РЎРѕР·РґР°РµРј РїРѕС‚РѕРє РїСЂРёРѕСЃС‚Р°РЅРѕРІР»РµРЅРЅС‹Рј
+  FreeOnTerminate := True; // РћСЃРІРѕР±РѕР¶РґР°С‚СЊ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РїСЂРё Р·Р°РІРµСЂС€РµРЅРёРё
   FFileName := FileName;
   FForm := Form;
 end;
 
-// Деструктор потока загрузки
+// Р”РµСЃС‚СЂСѓРєС‚РѕСЂ РїРѕС‚РѕРєР° Р·Р°РіСЂСѓР·РєРё
 destructor TDownloadThread.Destroy;
 begin
   if Assigned(FStream) then
-    FStream.Free; // Освобождение памяти для Memory Stream
+    FStream.Free; // РћСЃРІРѕР±РѕР¶РґРµРЅРёРµ РїР°РјСЏС‚Рё РґР»СЏ Memory Stream
   if Assigned(FNetHTTPClient) then
-    FNetHTTPClient.Free; // Освобождение HTTP-клиента
+    FNetHTTPClient.Free; // РћСЃРІРѕР±РѕР¶РґРµРЅРёРµ HTTP-РєР»РёРµРЅС‚Р°
   if Assigned(FURLList) then
-    FURLList.Free; // Освобождение списка строк
+    FURLList.Free; // РћСЃРІРѕР±РѕР¶РґРµРЅРёРµ СЃРїРёСЃРєР° СЃС‚СЂРѕРє
   inherited;
 end;
 
@@ -169,9 +169,9 @@ var
   I: Integer;
   Line, TVGID: String;
   FileName: String;
-  TempStream: TMemoryStream; // Локальная переменная потока
+  TempStream: TMemoryStream; // Р›РѕРєР°Р»СЊРЅР°СЏ РїРµСЂРµРјРµРЅРЅР°СЏ РїРѕС‚РѕРєР°
 begin
-  FNetHTTPClient := TNetHTTPClient.Create(nil); // Клиент остаётся общим
+  FNetHTTPClient := TNetHTTPClient.Create(nil); // РљР»РёРµРЅС‚ РѕСЃС‚Р°С‘С‚СЃСЏ РѕР±С‰РёРј
   FURLList := TStringList.Create;
   try
     FURLList.LoadFromFile(FFileName);
@@ -194,7 +194,7 @@ begin
             Continue;
 
 
-          // Создаём отдельный поток для каждого изображения
+          // РЎРѕР·РґР°С‘Рј РѕС‚РґРµР»СЊРЅС‹Р№ РїРѕС‚РѕРє РґР»СЏ РєР°Р¶РґРѕРіРѕ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ
           TempStream := TMemoryStream.Create;
           try
             try
@@ -202,18 +202,18 @@ begin
 
               if TempStream.Size > 0 then
               begin
-                // Проверяем, является ли файл настоящим PNG-изображением
+                // РџСЂРѕРІРµСЂСЏРµРј, СЏРІР»СЏРµС‚СЃСЏ Р»Рё С„Р°Р№Р» РЅР°СЃС‚РѕСЏС‰РёРј PNG-РёР·РѕР±СЂР°Р¶РµРЅРёРµРј
                 if CheckPNGSignature(TempStream) then
                   TempStream.SaveToFile(FileName);
               end
             except
               on E: Exception do
               begin
-                // Пропускаем все ошибки
+                // РџСЂРѕРїСѓСЃРєР°РµРј РІСЃРµ РѕС€РёР±РєРё
               end;
             end;
           finally
-            FreeAndNil(TempStream); // Освобождаем память после загрузки
+            FreeAndNil(TempStream); // РћСЃРІРѕР±РѕР¶РґР°РµРј РїР°РјСЏС‚СЊ РїРѕСЃР»Рµ Р·Р°РіСЂСѓР·РєРё
           end;
         end;
       end;
@@ -237,13 +237,13 @@ begin
 
     BMP := TBitmap.Create;
     try
-      // Устанавливаем размер 50x50
+      // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј СЂР°Р·РјРµСЂ 50x50
       BMP.Width := 50;
       BMP.Height := 50;
       BMP.PixelFormat := pf32bit;
       BMP.AlphaFormat := afDefined;
 
-      // Растягиваем изображение
+      // Р Р°СЃС‚СЏРіРёРІР°РµРј РёР·РѕР±СЂР°Р¶РµРЅРёРµ
       BMP.Canvas.StretchDraw(Rect(0, 0, 49, 49), PNG);
 
       Result := ilChanel.Add(BMP, nil);
@@ -264,7 +264,7 @@ var
   Index: Integer;
 begin
   if not Assigned(Control) then
-    raise Exception.Create('Компонент не определен');
+    raise Exception.Create('РљРѕРјРїРѕРЅРµРЅС‚ РЅРµ РѕРїСЂРµРґРµР»РµРЅ');
 
   PNG := TPngImage.Create;
   try
@@ -278,7 +278,7 @@ begin
       Bmp.Canvas.Brush.Color := clWhite;
       Bmp.Canvas.FillRect(Rect(0, 0, Bmp.Width, Bmp.Height));
 
-      // Расчет пропорций
+      // Р Р°СЃС‡РµС‚ РїСЂРѕРїРѕСЂС†РёР№
       var ScaleX := Bmp.Width / PNG.Width;
       var ScaleY := Bmp.Height / PNG.Height;
       var Scale := Min(ScaleX, ScaleY);
@@ -294,7 +294,7 @@ begin
         PNG
       );
 
-      // Обработка разных типов компонентов
+      // РћР±СЂР°Р±РѕС‚РєР° СЂР°Р·РЅС‹С… С‚РёРїРѕРІ РєРѕРјРїРѕРЅРµРЅС‚РѕРІ
       if Control is TBitBtn then
       begin
         (Control as TBitBtn).Glyph.Assign(Bmp);
@@ -305,7 +305,7 @@ begin
       end
       else if Control is TButton then
       begin
-        // Создаем временный ImageList для TButton
+        // РЎРѕР·РґР°РµРј РІСЂРµРјРµРЅРЅС‹Р№ ImageList РґР»СЏ TButton
         ImageList := TImageList.Create(nil);
         try
           ImageList.Width := Control.Width;
@@ -345,9 +345,9 @@ end;
 
 function TfrmStickyForm.GetLogoIndexForItem(Index: Integer): Integer;
 begin
-  // Здесь ваша логика получения индекса
-  // Например:
-  Result := Index mod ilChanel.Count; // Простой пример
+  // Р—РґРµСЃСЊ РІР°С€Р° Р»РѕРіРёРєР° РїРѕР»СѓС‡РµРЅРёСЏ РёРЅРґРµРєСЃР°
+  // РќР°РїСЂРёРјРµСЂ:
+  Result := Index mod ilChanel.Count; // РџСЂРѕСЃС‚РѕР№ РїСЂРёРјРµСЂ
 end;
 
 
@@ -387,10 +387,10 @@ begin
       VLC_Player.Play(Copy(ItemText, PosURL + Length('URL:') + 1, Length(ItemText)));
     end
     else
-      lbStatus.caption:='URL не найден';
+      lbStatus.caption:='URL РЅРµ РЅР°Р№РґРµРЅ';
   except
     on E: Exception do
-      lbStatus.caption := 'Ошибка: ' + E.Message;
+      lbStatus.caption := 'РћС€РёР±РєР°: ' + E.Message;
   end;
 end;
 
@@ -407,14 +407,14 @@ begin
   ListBox := TListBox(Control);
   Canvas := ListBox.Canvas;
 
-  // Проверка наличия ImageList
+  // РџСЂРѕРІРµСЂРєР° РЅР°Р»РёС‡РёСЏ ImageList
   if not Assigned(ilChanel) then
   begin
-    ShowMessage('ImageList не назначен!');
+    ShowMessage('ImageList РЅРµ РЅР°Р·РЅР°С‡РµРЅ!');
     Exit;
   end;
 
-  // Очистка области
+  // РћС‡РёСЃС‚РєР° РѕР±Р»Р°СЃС‚Рё
   if odSelected in State then
     Canvas.Brush.Color := clHighlight
   else
@@ -422,16 +422,16 @@ begin
 
   Canvas.FillRect(Rect);
 
-  // Получаем текст элемента
+  // РџРѕР»СѓС‡Р°РµРј С‚РµРєСЃС‚ СЌР»РµРјРµРЅС‚Р°
   Text := ListBox.Items[Index];
 
-  // Получаем индекс изображения
+  // РџРѕР»СѓС‡Р°РµРј РёРЅРґРµРєСЃ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ
   LogoIndex := GetLogoIndexForItem(Index);
 
-  // Проверяем корректность индекса
+  // РџСЂРѕРІРµСЂСЏРµРј РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚СЊ РёРЅРґРµРєСЃР°
   if (LogoIndex >= 0) and (LogoIndex < ilChanel.Count) then
   begin
-    // Рисуем изображение с проверкой размеров
+    // Р РёСЃСѓРµРј РёР·РѕР±СЂР°Р¶РµРЅРёРµ СЃ РїСЂРѕРІРµСЂРєРѕР№ СЂР°Р·РјРµСЂРѕРІ
     ilChanel.Draw(
       Canvas,
       Rect.Left + 2,
@@ -440,19 +440,19 @@ begin
     );
   end;
 
-  // Настраиваем параметры текста
+  // РќР°СЃС‚СЂР°РёРІР°РµРј РїР°СЂР°РјРµС‚СЂС‹ С‚РµРєСЃС‚Р°
   Canvas.Font := ListBox.Font;
   if odSelected in State then
     Canvas.Font.Color := clHighlightText
   else
     Canvas.Font.Color := clWindowText;
 
-  // Создаем прямоугольник для текста
+  // РЎРѕР·РґР°РµРј РїСЂСЏРјРѕСѓРіРѕР»СЊРЅРёРє РґР»СЏ С‚РµРєСЃС‚Р°
   ItemRect := Rect;
   ItemRect.Left := ItemRect.Left + ilChanel.Width + 10;
   ItemRect.Top := ItemRect.Top + 2;
 
-  // Разбиваем текст на строки
+  // Р Р°Р·Р±РёРІР°РµРј С‚РµРєСЃС‚ РЅР° СЃС‚СЂРѕРєРё
   Y := ItemRect.Top;
   while (Text <> '') and (Y < ItemRect.Bottom) do
   begin
@@ -495,7 +495,7 @@ begin
 
 {  with TDownloadThread.Create(Form1.edURLM3U.Text, Self) do
   begin
-      Start; // Стартуем поток
+      Start; // РЎС‚Р°СЂС‚СѓРµРј РїРѕС‚РѕРє
   end;   }
 
   List := TStringList.Create;
@@ -504,7 +504,7 @@ begin
       List.LoadFromFile(FileName, TEncoding.UTF8);
     except on E: Exception do
       begin
-        ShowMessage('Ошибка загрузки файла: ' + E.Message);
+        ShowMessage('РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё С„Р°Р№Р»Р°: ' + E.Message);
         Exit;
       end;
     end;
@@ -528,11 +528,11 @@ begin
           Attrs.StrictDelimiter := True;
           Attrs.DelimitedText := Attributes;
 
-          // Формируем текстовую строку
+          // Р¤РѕСЂРјРёСЂСѓРµРј С‚РµРєСЃС‚РѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
           Result := IntToStr(ItemNumber) + '. ' + ChannelName;
           LogoURL := '';
 
-          // Собираем атрибуты
+          // РЎРѕР±РёСЂР°РµРј Р°С‚СЂРёР±СѓС‚С‹
           for j := 0 to Attrs.Count - 1 do
           begin
             if Pos('=', Attrs[j]) > 0 then
@@ -548,27 +548,27 @@ begin
             end;
           end;
 
-          // Добавляем URL
+          // Р”РѕР±Р°РІР»СЏРµРј URL
           if (i + 1 < List.Count) and (Pos('#EXTINF', List[i + 1]) <> 1) then
           begin
             URL := List[i + 1];
             Result := Result + #13#10 + 'URL: ' + URL;
           end;
 
-          // Добавляем элемент в ListBox
+          // Р”РѕР±Р°РІР»СЏРµРј СЌР»РµРјРµРЅС‚ РІ ListBox
           lbIPTVlist.Items.Add(Result);
 
-          // Сохраняем URL логотипа для дальнейшего использования
-          // (можно добавить изображения через ImageList)
-          // Настройка ImageList под размер 70x70
+          // РЎРѕС…СЂР°РЅСЏРµРј URL Р»РѕРіРѕС‚РёРїР° РґР»СЏ РґР°Р»СЊРЅРµР№С€РµРіРѕ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ
+          // (РјРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ С‡РµСЂРµР· ImageList)
+          // РќР°СЃС‚СЂРѕР№РєР° ImageList РїРѕРґ СЂР°Р·РјРµСЂ 70x70
           ilChanel.Width :=  50;
           ilChanel.Height := 50;
           ilChanel.ColorDepth := cd32Bit;
 
-          // Загрузка изображений
+          // Р—Р°РіСЂСѓР·РєР° РёР·РѕР±СЂР°Р¶РµРЅРёР№
           LoadPNGToImageList(path+'IPTV_Plugin\image\No.png');
 
-           // Настройка ListBox
+           // РќР°СЃС‚СЂРѕР№РєР° ListBox
           lbIPTVlist.Style := lbOwnerDrawFixed;
           lbIPTVlist.ItemHeight := ilChanel.Height + 10;
 
@@ -579,7 +579,7 @@ begin
       end
       else
       begin
-        // Пропускаем ненужные строки
+        // РџСЂРѕРїСѓСЃРєР°РµРј РЅРµРЅСѓР¶РЅС‹Рµ СЃС‚СЂРѕРєРё
       end;
     end;
 
@@ -687,12 +687,12 @@ begin
  if   VLC_Player.GetAudioVolume()= 0 then
  begin
    VLC_Player.SetAudioVolume(tvVolume.Position);
-   lbStatus.Caption:= 'Громкость ' + IntToStr(tvVolume.Position) + '%';
+   lbStatus.Caption:= 'Р“СЂРѕРјРєРѕСЃС‚СЊ ' + IntToStr(tvVolume.Position) + '%';
  end
      else
    begin
      VLC_Player.SetAudioVolume(0);
-     lbStatus.Caption:='Звук отключен'
+     lbStatus.Caption:='Р—РІСѓРє РѕС‚РєР»СЋС‡РµРЅ'
    end;
 end;
 
@@ -717,13 +717,13 @@ begin
 
   case VLC_Player.GetState() of
     plvPlayer_NothingSpecial: stateName := '';
-    plvPlayer_Opening:        stateName := 'Открытие потока';
-    plvPlayer_Buffering:      stateName := 'Буфирация';
+    plvPlayer_Opening:        stateName := 'РћС‚РєСЂС‹С‚РёРµ РїРѕС‚РѕРєР°';
+    plvPlayer_Buffering:      stateName := 'Р‘СѓС„РёСЂР°С†РёСЏ';
 //    plvPlayer_Playing:        stateName :=  TVProgramm;
-    plvPlayer_Paused:         stateName := 'Пауза';
-    plvPlayer_Stopped:        stateName := 'Остановлено';
+    plvPlayer_Paused:         stateName := 'РџР°СѓР·Р°';
+    plvPlayer_Stopped:        stateName := 'РћСЃС‚Р°РЅРѕРІР»РµРЅРѕ';
     plvPlayer_Ended:          stateName := '';
-    plvPlayer_Error:          stateName := 'Ошибка загрузки потока';
+    plvPlayer_Error:          stateName := 'РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РїРѕС‚РѕРєР°';
     else                      stateName := '';
   end;
 
@@ -736,7 +736,7 @@ end;
 procedure TfrmStickyForm.tvVolumeChange(Sender: TObject);
 begin
   VLC_Player.SetAudioVolume(tvVolume.Position);
-  lbStatus.Caption := 'Громкость ' + IntToStr(tvVolume.Position) + '%'
+  lbStatus.Caption := 'Р“СЂРѕРјРєРѕСЃС‚СЊ ' + IntToStr(tvVolume.Position) + '%'
 end;
 
 initialization
