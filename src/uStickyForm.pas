@@ -35,8 +35,6 @@ type
     sbVolume: TSpeedButton;
     N1231: TMenuItem;
     procedure C1Click(Sender: TObject);
-    procedure lbIPTVlistDrawItem(Control: TWinControl; Index: Integer;
-      Rect: TRect; State: TOwnerDrawState);
     procedure sbOpenClick(Sender: TObject);
     procedure sbNextClick(Sender: TObject);
     procedure sbBackClick(Sender: TObject);
@@ -47,35 +45,39 @@ type
     procedure sbVolumeClick(Sender: TObject);
     procedure lbIPTVlistDblClick(Sender: TObject);
     procedure N1Click(Sender: TObject);
-    procedure FormCreate(Sender: TObject);
+    procedure lbIPTVlistDrawItem(Control: TWinControl; Index: Integer;
+      Rect: TRect; State: TOwnerDrawState);
+    procedure FormShow(Sender: TObject);
   private
     FParentChanName: WideString;
     FParentChanHandle: HWND;
     procedure SetParentChanName(const Value: WideString);
     procedure SetParentChanHandle(const Value: HWND);
     { Private declarations }
-    function LoadPNGToImageList(const AFileName: string): Integer;
-    function GetLogoIndexForItem(Index: Integer): Integer;
+    function LoadPNGToImageList(const AFileName: string): Integer; // Загружает изображение в ImageList
+    function GetLogoIndexForItem(Index: Integer): Integer; // Возвращает индекс логотипа
+    procedure OnImageLoaded(const TVGID: string; Success: boolean); // Оповещение о загрузке
   public
     property ParentChanName   : WideString read FParentChanName write SetParentChanName;
     property ParentChanHandle : HWND read FParentChanHandle write SetParentChanHandle;
-    procedure ParseM3U(const FileName: string);
+    procedure ParseM3U(const FileName: string); // Читает и обрабатывает файл .m3u
 
     { Public declarations }
   end;
 
   TDownloadThread = class(TThread)
   private
-    FFileName: string;
-    FNetHTTPClient: TNetHTTPClient;
-    FStream: TMemoryStream;
-    FURLList: TStringList;
-    FForm: TfrmStickyForm;
+    FFileName: string;                     // Имя файла .m3u
+    FNetHTTPClient: TNetHTTPClient;        // Клиент для сетевых запросов
+    FStream: TMemoryStream;                // Поток для чтения данных
+    FURLList: TStringList;                 // Списки адресов логотипов
+    FForm: TfrmStickyForm;                        // Форма приложения
+    FTVGID: string;                       // Текущий идентификатор канала
   protected
-    procedure Execute; override;
+    procedure Execute; override;           // Основной метод потока
   public
-    constructor Create(const FileName: string; Form: TfrmStickyForm);
-    destructor Destroy; override;
+    constructor Create(const FileName: string; Form: TfrmStickyForm); // Создание потока
+    destructor Destroy; override;          // Удаление ресурсов
   end;
 
 
@@ -83,6 +85,7 @@ type
 var
   frmStickyForm : TfrmStickyForm;
   ImageList: TImageList;
+  PathStyle: String;
 
 
 
@@ -169,10 +172,11 @@ var
   I: Integer;
   Line, TVGID: String;
   FileName: String;
-  TempStream: TMemoryStream; // Локальная переменная потока
 begin
-  FNetHTTPClient := TNetHTTPClient.Create(nil); // Клиент остаётся общим
+  FStream := TMemoryStream.Create;
+  FNetHTTPClient := TNetHTTPClient.Create(nil);
   FURLList := TStringList.Create;
+
   try
     FURLList.LoadFromFile(FFileName);
 
@@ -180,51 +184,114 @@ begin
     begin
       Line := FURLList[I];
 
+      // Извлекаем TVGID независимо от наличия логотипа
+      TVGID := ExtractTVGID(Line);
+
+      // Если TVGID не найден, ставим картинку NoLogo.png
+      if TVGID = '' then
+      begin
+        FForm.OnImageLoaded('', false); // Нет ID, ставим NoLogo.png
+        Continue;
+      end;
+
+      // Далее проверяем наличие логотипа
       if Pos('tvg-logo="', Line) > 0 then
       begin
         Delete(Line, 1, Pos('tvg-logo=', Line) + Length('tvg-logo='));
-        Line := Trim(Copy(Line, 1, Pos('"', Line) - 1));
+        Line := Trim(Copy(Line, 1, Pos('"', Line) - 1)); // Линия теперь содержит URL логотипа
 
-        TVGID := ExtractTVGID(FURLList[I]);
-        if TVGID <> '' then
+        FileName := Format(PathStyle + '\logo-channels\%s.png', [TVGID]); // Полный путь сохранения
+
+        if FileExists(FileName) then
         begin
-          FileName := Format('%s.png', [TVGID]);
+          FForm.OnImageLoaded(TVGID, true); // Файл уже существует
+          Continue;
+        end;
 
-          if FileExists(FileName) then
-            Continue;
+        try
+          FStream.Clear;
+          FNetHTTPClient.Get(Line, FStream);
 
-
-          // Создаём отдельный поток для каждого изображения
-          TempStream := TMemoryStream.Create;
-          try
-            try
-              FNetHTTPClient.Get(Line, TempStream);
-
-              if TempStream.Size > 0 then
-              begin
-                // Проверяем, является ли файл настоящим PNG-изображением
-                if CheckPNGSignature(TempStream) then
-                  TempStream.SaveToFile(FileName);
-              end
-            except
-              on E: Exception do
-              begin
-                // Пропускаем все ошибки
-              end;
+          if FStream.Size > 0 then
+          begin
+            if CheckPNGSignature(FStream) then
+            begin
+              FStream.SaveToFile(FileName);
+              FForm.OnImageLoaded(TVGID, true); // Успешно скачали и сохранили
+            end
+            else
+            begin
+              FForm.OnImageLoaded(TVGID, false); // Неправильный формат файла
             end;
-          finally
-            FreeAndNil(TempStream); // Освобождаем память после загрузки
+          end
+          else
+          begin
+            FForm.OnImageLoaded(TVGID, false); // Сервер вернул пустой ответ
+          end;
+        except
+          on E: Exception do
+          begin
+            FForm.OnImageLoaded(TVGID, false); // Произошла ошибка при скачивании
           end;
         end;
+      end
+      else
+      begin
+        // Если logo не найден, тоже показываем NoLogo.png
+        FForm.OnImageLoaded(TVGID, false);
       end;
     end;
   finally
     FreeAndNil(FURLList);
+    FreeAndNil(FStream);
     FreeAndNil(FNetHTTPClient);
   end;
 end;
 
 
+// Процедура оповещения формы о результате загрузки
+procedure TfrmStickyForm.OnImageLoaded(const TVGID: string; Success: boolean);
+var
+  ItemIndex: integer;
+begin
+  if Success then
+  begin
+    // Находим индекс элемента в списке по его TVG-ID
+    for ItemIndex := 0 to lbIPTVlist.Items.Count - 1 do
+    begin
+      if lbIPTVlist.Items.Strings[ItemIndex].Contains(TVGID) then
+      begin
+        // Загружаем изображение и назначаем его данному элементу
+        LoadPNGToImageList(Format(PathStyle + '\logo-channels\%s.png', [TVGID]));
+        lbIPTVlist.Refresh;
+        break;
+      end;
+    end;
+  end
+  else
+  begin
+    // Если логотип не найден или произошел сбой загрузки, используем "No.png"
+    LoadPNGToImageList(PathStyle + '\logo-channels\NoLogo.png');
+    lbIPTVlist.Refresh;
+  end;
+end;
+
+// Функция для получения индекса изображения
+function TfrmStickyForm.GetLogoIndexForItem(Index: Integer): Integer;var  LocalResult: Integer;
+begin
+   if ilChanel.Count <= 0 then
+    begin
+      Result := 0; // Использовать нулевое изображение ("No.png") при отсутствии изображений
+      Exit;
+    end;
+    LocalResult := Index mod ilChanel.Count;
+
+    if (LocalResult < 0) or (LocalResult >= ilChanel.Count) then
+    LocalResult := 0; // Индексация изображения "No.png"
+    Result := LocalResult;
+ end;
+
+// Функция загрузки PNG в ImageList
 function TfrmStickyForm.LoadPNGToImageList(const AFileName: string): Integer;
 var
   PNG: TPngImage;
@@ -255,6 +322,119 @@ begin
   end;
 end;
 
+
+
+
+// Парсер M3U файлов
+procedure TfrmStickyForm.ParseM3U(const FileName: string);
+var
+  List: TStringList;
+  i, j, ItemNumber: Integer;
+  Line, Attributes, URL, ChannelName, Key, Value: string;
+  Attrs: TStringList;
+  Result: string;
+  LogoURL: string;
+
+  function CleanQuotes(const S: string): string;
+  begin
+    Result := S;
+    if (Length(Result) > 0) and (Result[1] = '"') then
+      Delete(Result, 1, 1);
+    if (Length(Result) > 0) and (Result[Length(Result)] = '"') then
+      Delete(Result, Length(Result), 1);
+  end;
+
+begin
+  lbIPTVlist.Clear;
+//  ilChanel.Clear;
+  ItemNumber := 1;
+
+  List := TStringList.Create;
+  try
+    try
+      List.LoadFromFile(FileName, TEncoding.UTF8);
+    except on E: Exception do
+      begin
+        ShowMessage('Ошибка загрузки файла: ' + E.Message);
+        Exit;
+      end;
+    end;
+
+    for i := 0 to List.Count - 1 do
+    begin
+      Line := List[i];
+
+      if Line = '#EXTM3U' then
+        Continue;
+
+      if Pos('#EXTINF', Line) = 1 then
+      begin
+        Delete(Line, 1, 8);
+        Attributes := Copy(Line, 1, Pos(',', Line) - 1);
+        ChannelName := Trim(Copy(Line, Pos(',', Line) + 1, Length(Line)));
+
+        Attrs := TStringList.Create;
+        try
+          Attrs.Delimiter := ' ';
+          Attrs.StrictDelimiter := True;
+          Attrs.DelimitedText := Attributes;
+
+          // Формируем текстовую строку
+          Result := IntToStr(ItemNumber) + '. ' + ChannelName;
+          LogoURL := '';
+
+          // Собираем атрибуты
+          for j := 0 to Attrs.Count - 1 do
+          begin
+            if Pos('=', Attrs[j]) > 0 then
+            begin
+              Key := Trim(Copy(Attrs[j], 1, Pos('=', Attrs[j]) - 1));
+              Value := Trim(Copy(Attrs[j], Pos('=', Attrs[j]) + 1, Length(Attrs[j])));
+              Value := CleanQuotes(Value);
+
+              if Key = 'tvg-logo' then
+                LogoURL := Value
+              else
+                Result := Result + #13#10 + '  ' + Key + ': ' + Value;
+            end;
+          end;
+
+          // Добавляем URL
+          if (i + 1 < List.Count) and (Pos('#EXTINF', List[i + 1]) <> 1) then
+          begin
+            URL := List[i + 1];
+            Result := Result + #13#10 + 'URL: ' + URL;
+          end;
+
+          // Добавляем элемент в ListBox
+          lbIPTVlist.Items.Add(Result);
+
+          Inc(ItemNumber);
+        finally
+          Attrs.Free;
+        end;
+      end
+      else
+      begin
+        // Пропускаем ненужные строки
+      end;
+    end;
+
+  finally
+    List.Free;
+  end;
+
+
+  with TDownloadThread.Create(Form1.edURLM3U.Text, Self) do
+  begin
+      Start; // Стартуем поток
+  end;
+end;
+
+procedure TfrmStickyForm.N1Click(Sender: TObject);
+begin
+  Form1.Show;
+end;
 
 procedure LoadPNGToControl(const FileName: string; Control: TControl);
 var
@@ -325,34 +505,21 @@ begin
   end;
 end;
 
-
-
-procedure TfrmStickyForm.N1Click(Sender: TObject);
+procedure TfrmStickyForm.FormShow(Sender: TObject);
 begin
-  Form1.Show;
+    PathStyle := Form1.lePachStyle.Text ;
+    LoadPNGToControl(PathStyle+'\image-button\backward.png', sbBack);
+    LoadPNGToControl(PathStyle+'\image-button\screen-full.png', sbFullScreen);
+    LoadPNGToControl(PathStyle+'\image-button\forwards.png', sbNext);
+    LoadPNGToControl(PathStyle+'\image-button\film-list.png', sbOpen);
+    LoadPNGToControl(PathStyle+'\image-button\play.png', sbPlay);
+    LoadPNGToControl(PathStyle+'\image-button\stop-playing.png', sbStop);
+    LoadPNGToControl(PathStyle+'\image-button\volume-mute.png', sbVolume);
+
+    // Если файл существует грузим список каналов
+    if FileExists(Form1.edURLM3U.Text) then
+      ParseM3U(Form1.edURLM3U.Text);
 end;
-
-procedure TfrmStickyForm.FormCreate(Sender: TObject);
-begin
-    LoadPNGToControl(path+'IPTV_Plugin\button\backward.png', sbBack);
-    LoadPNGToControl(path+'IPTV_Plugin\button\screen-full.png', sbFullScreen);
-    LoadPNGToControl(path+'IPTV_Plugin\button\forwards.png', sbNext);
-    LoadPNGToControl(path+'IPTV_Plugin\button\film-list.png', sbOpen);
-    LoadPNGToControl(path+'IPTV_Plugin\button\play.png', sbPlay);
-    LoadPNGToControl(path+'IPTV_Plugin\button\stop-playing.png', sbStop);
-    LoadPNGToControl(path+'IPTV_Plugin\button\volume-mute.png', sbVolume);
-end;
-
-function TfrmStickyForm.GetLogoIndexForItem(Index: Integer): Integer;
-begin
-  // Здесь ваша логика получения индекса
-  // Например:
-  Result := Index mod ilChanel.Count; // Простой пример
-end;
-
-
-
-
 
 procedure TfrmStickyForm.C1Click(Sender: TObject);
 begin
@@ -414,6 +581,13 @@ begin
     Exit;
   end;
 
+  // Проверка размеров элемента
+  if (Rect.Right - Rect.Left < 50) or (Rect.Bottom - Rect.Top < 50) then
+  begin
+    ListBox.ItemHeight := 50; // Устанавливаем фиксированную высоту
+    Exit;
+  end;
+
   // Очистка области
   if odSelected in State then
     Canvas.Brush.Color := clHighlight
@@ -431,7 +605,7 @@ begin
   // Проверяем корректность индекса
   if (LogoIndex >= 0) and (LogoIndex < ilChanel.Count) then
   begin
-    // Рисуем изображение с проверкой размеров
+    // Рисуем изображение с правильными координатами
     ilChanel.Draw(
       Canvas,
       Rect.Left + 2,
@@ -449,7 +623,7 @@ begin
 
   // Создаем прямоугольник для текста
   ItemRect := Rect;
-  ItemRect.Left := ItemRect.Left + ilChanel.Width + 10;
+  ItemRect.Left := ItemRect.Left + 54; // 70 (ширина лого) + 4 пикселя отступа
   ItemRect.Top := ItemRect.Top + 2;
 
   // Разбиваем текст на строки
@@ -469,127 +643,6 @@ begin
     end;
   end;
 end;
-
-
-procedure TfrmStickyForm.ParseM3U(const FileName: string);
-var
-  List: TStringList;
-  i, j, ItemNumber: Integer;
-  Line, Attributes, URL, ChannelName, Key, Value: string;
-  Attrs: TStringList;
-  Result: string;
-  LogoURL: string;
-
-  function CleanQuotes(const S: string): string;
-  begin
-    Result := S;
-    if (Length(Result) > 0) and (Result[1] = '"') then
-      Delete(Result, 1, 1);
-    if (Length(Result) > 0) and (Result[Length(Result)] = '"') then
-      Delete(Result, Length(Result), 1);
-  end;
-
-begin
-  lbIPTVlist.Clear;
-  ItemNumber := 1;
-
-{  with TDownloadThread.Create(Form1.edURLM3U.Text, Self) do
-  begin
-      Start; // Стартуем поток
-  end;   }
-
-  List := TStringList.Create;
-  try
-    try
-      List.LoadFromFile(FileName, TEncoding.UTF8);
-    except on E: Exception do
-      begin
-        ShowMessage('Ошибка загрузки файла: ' + E.Message);
-        Exit;
-      end;
-    end;
-
-    for i := 0 to List.Count - 1 do
-    begin
-      Line := List[i];
-
-      if Line = '#EXTM3U' then
-        Continue;
-
-      if Pos('#EXTINF', Line) = 1 then
-      begin
-        Delete(Line, 1, 8);
-        Attributes := Copy(Line, 1, Pos(',', Line) - 1);
-        ChannelName := Trim(Copy(Line, Pos(',', Line) + 1, Length(Line)));
-
-        Attrs := TStringList.Create;
-        try
-          Attrs.Delimiter := ' ';
-          Attrs.StrictDelimiter := True;
-          Attrs.DelimitedText := Attributes;
-
-          // Формируем текстовую строку
-          Result := IntToStr(ItemNumber) + '. ' + ChannelName;
-          LogoURL := '';
-
-          // Собираем атрибуты
-          for j := 0 to Attrs.Count - 1 do
-          begin
-            if Pos('=', Attrs[j]) > 0 then
-            begin
-              Key := Trim(Copy(Attrs[j], 1, Pos('=', Attrs[j]) - 1));
-              Value := Trim(Copy(Attrs[j], Pos('=', Attrs[j]) + 1, Length(Attrs[j])));
-              Value := CleanQuotes(Value);
-
-              if Key = 'tvg-logo' then
-                LogoURL := Value
-              else
-                Result := Result + #13#10 +  Key + ': ' + Value;
-            end;
-          end;
-
-          // Добавляем URL
-          if (i + 1 < List.Count) and (Pos('#EXTINF', List[i + 1]) <> 1) then
-          begin
-            URL := List[i + 1];
-            Result := Result + #13#10 + 'URL: ' + URL;
-          end;
-
-          // Добавляем элемент в ListBox
-          lbIPTVlist.Items.Add(Result);
-
-          // Сохраняем URL логотипа для дальнейшего использования
-          // (можно добавить изображения через ImageList)
-          // Настройка ImageList под размер 70x70
-          ilChanel.Width :=  50;
-          ilChanel.Height := 50;
-          ilChanel.ColorDepth := cd32Bit;
-
-          // Загрузка изображений
-          LoadPNGToImageList(path+'IPTV_Plugin\image\No.png');
-
-           // Настройка ListBox
-          lbIPTVlist.Style := lbOwnerDrawFixed;
-          lbIPTVlist.ItemHeight := ilChanel.Height + 10;
-
-          Inc(ItemNumber);
-        finally
-          Attrs.Free;
-        end;
-      end
-      else
-      begin
-        // Пропускаем ненужные строки
-      end;
-    end;
-
-  finally
-    List.Free;
-  end;
-end;
-
-
-
 
 procedure TfrmStickyForm.sbBackClick(Sender: TObject);
 var
@@ -670,9 +723,11 @@ end;
 
 procedure TfrmStickyForm.sbOpenClick(Sender: TObject);
 begin
+//  ilChanel.Clear;
+
   if odFile.Execute then
   begin
-    ParseM3U(odFile.FileName);
+     ParseM3U(odFile.FileName);
     Form1.edURLM3U.Text := odFile.FileName;
   end;
 end;

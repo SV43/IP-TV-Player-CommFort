@@ -58,6 +58,7 @@ var
 begin
   Ini:=TiniFile.Create(path+'IPTV_Plugin\IPTV_Plug.ini');
   Ini.WriteString('Setings','VideoLan VLC Dll', Form1.dePachVLC.Text);
+  Ini.WriteString('Setings','Style', Form1.lePachStyle.Text);
   Ini.WriteString('Setings','Chann IPTV Plug', Form1.cbIPTVchan.Text);
   Ini.WriteString('Setings','URL M3U', Form1.edURLM3U.Text);
   Ini.WriteString('Setings','URL JTV', Form1.edURLJTV.Text);
@@ -70,6 +71,7 @@ var
 begin
   Ini:=TiniFile.Create(path+'IPTV_Plugin\IPTV_Plug.ini');
   Form1.dePachVLC.Text:=Ini.ReadString('Setings', 'VideoLan VLC Dll',ExtractFileDir(ParamStr(0))+'\Plugins\VLC');
+  Form1.lePachStyle.Text:=Ini.ReadString('Setings', 'Style', ExtractFileDir(ParamStr(0))+'IPTV_Plugin\style\');
   Form1.cbIPTVchan.Text:=Ini.ReadString('Setings', 'Chann IPTV Plug','IP-TV');
   Form1.edURLM3U.Text:=Ini.ReadString('Setings', 'URL M3U','https://site.ru/iptv.m3u');
   Form1.edURLJTV.Text:=Ini.ReadString('Setings', 'URL JTV','https://site.ru/jtv.zip2');
@@ -148,9 +150,7 @@ begin
     reenter;
     StickyChanName := Form1.cbIPTVchan.Text;
 
-    // Если файл существует грузим список каналов
-    if FileExists(Form1.edURLM3U.Text) then
-      frmStickyForm.ParseM3U(Form1.edURLM3U.Text);
+
 
     // Установка таймера
     setTimer(0, 1, TIMER_INTERVAL, @Refrash_Form);
