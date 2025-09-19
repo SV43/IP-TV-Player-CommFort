@@ -20,8 +20,6 @@ type
     edURLJTV: TLabeledEdit;
     pnButton: TPanel;
     btSave: TButton;
-    tsLog: TTabSheet;
-    Memo1: TMemo;
     lePachStyle: TLabeledEdit;
     procedure FormShow(Sender: TObject);
     procedure btSaveClick(Sender: TObject);

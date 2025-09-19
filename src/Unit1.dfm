@@ -21,7 +21,6 @@ object Form1: TForm1
     ActivePage = tsSettings
     Align = alClient
     TabOrder = 0
-    ExplicitHeight = 251
     object tsSettings: TTabSheet
       Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
       object lbCCaptionChanel: TLabel
@@ -87,18 +86,6 @@ object Form1: TForm1
       Caption = #1054' '#1087#1083#1072#1075#1080#1085#1077
       ImageIndex = 1
     end
-    object tsLog: TTabSheet
-      Caption = 'Log'
-      ImageIndex = 2
-      object Memo1: TMemo
-        Left = 0
-        Top = 0
-        Width = 386
-        Height = 293
-        Align = alClient
-        TabOrder = 0
-      end
-    end
   end
   object pnButton: TPanel
     Left = 0
@@ -107,7 +94,6 @@ object Form1: TForm1
     Height = 41
     Align = alBottom
     TabOrder = 1
-    ExplicitTop = 251
     object btSave: TButton
       Left = 128
       Top = 8

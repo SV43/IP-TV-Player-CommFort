@@ -121,6 +121,7 @@
             <FormType>dfm</FormType>
         </DCCReference>
         <DCCReference Include="src\sevenzip.pas"/>
+        <DCCReference Include="src\uImageTrackBar.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -189,6 +190,12 @@
             </Platforms>
             <Deployment Version="4">
                 <DeployFile LocalName="$(BDS)\Redist\osx32\libcgunwind.1.0.dylib" Class="DependencyModule"/>
+                <DeployFile LocalName="C:\Program Files (x86)\CommFort\Plugins\IPTV_Plugin.cfplug.cfplug" Configuration="Release" Class="ProjectOutput">
+                    <Platform Name="Win32">
+                        <RemoteName>IPTV_Plugin.dll</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
                 <DeployFile LocalName="C:\Program Files (x86)\CommFort\Plugins\IPTV_Plugin.dll" Configuration="Debug" Class="ProjectOutput"/>
                 <DeployFile LocalName="D:\hernay\CommFort\Plugins\IPTV_Plugin.cfplug.dll" Configuration="Release" Class="ProjectOutput"/>
                 <DeployFile LocalName="D:\hernay\CommFort\Plugins\IPTV_Plugin.dll" Configuration="Debug" Class="ProjectOutput"/>
