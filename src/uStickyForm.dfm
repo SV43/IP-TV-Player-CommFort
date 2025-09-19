@@ -13,6 +13,7 @@ object frmStickyForm: TfrmStickyForm
   Font.Height = -11
   Font.Name = 'MS Sans Serif'
   Font.Style = []
+  OnCreate = FormCreate
   OnDestroy = FormDestroy
   OnShow = FormShow
   TextHeight = 13
@@ -52,23 +53,15 @@ object frmStickyForm: TfrmStickyForm
       Flat = True
       OnClick = sbPlayClick
     end
-    object sbStop: TSpeedButton
+    object sbNext: TSpeedButton
       Left = 129
       Top = 1
       Width = 64
       Height = 64
       Align = alLeft
       Flat = True
-      OnClick = sbStopClick
-    end
-    object sbNext: TSpeedButton
-      Left = 193
-      Top = 1
-      Width = 64
-      Height = 64
-      Align = alLeft
-      Flat = True
       OnClick = sbNextClick
+      ExplicitLeft = 193
     end
     object sbFullScreen: TSpeedButton
       Left = 1043
@@ -78,20 +71,21 @@ object frmStickyForm: TfrmStickyForm
       Align = alRight
       Flat = True
       OnClick = sbFullScreenClick
-      ExplicitLeft = 1051
+      ExplicitLeft = 1042
     end
     object sbOpen: TSpeedButton
-      Left = 257
+      Left = 193
       Top = 1
       Width = 64
       Height = 64
       Align = alLeft
       Flat = True
       OnClick = sbOpenClick
+      ExplicitLeft = 257
     end
     object lbStatus: TLabel
       AlignWithMargins = True
-      Left = 336
+      Left = 272
       Top = 4
       Width = 7
       Height = 58
@@ -104,6 +98,7 @@ object frmStickyForm: TfrmStickyForm
       Font.Style = [fsBold]
       ParentFont = False
       Layout = tlCenter
+      ExplicitLeft = 336
       ExplicitHeight = 24
     end
     object sbVolume: TSpeedButton
@@ -113,7 +108,7 @@ object frmStickyForm: TfrmStickyForm
       Height = 64
       Align = alRight
       Flat = True
-      ExplicitLeft = 995
+      ExplicitLeft = 977
     end
     object tvVolume: TImageTrackBar
       Left = 779
@@ -138,17 +133,10 @@ object frmStickyForm: TfrmStickyForm
       Top = 1
       Width = 773
       Height = 440
-      ParentCustomHint = False
       Align = alClient
-      ParentShowHint = False
       PopupMenu = pmMenu
-      ShowHint = False
-      SpuShow = False
-      OsdShow = False
-      AudioOutput = aoWaveOut
       SnapShotFmt = 'png'
-      DeinterlaceMode = dmBLEND
-      UseEvents = False
+      OnMediaPlayerPlaying = VLC_PlayerMediaPlayerPlaying
       MouseEventsHandler = mehComponent
     end
   end

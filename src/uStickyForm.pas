@@ -1,4 +1,4 @@
-unit uStickyForm;
+п»їunit uStickyForm;
 
 interface
 
@@ -30,10 +30,8 @@ type
     PanelButton: TPanel;
     Splitter1: TSplitter;
     pnPlayer: TPanel;
-    VLC_Player: TPasLibVlcPlayer;
     sbBack: TSpeedButton;
     sbPlay: TSpeedButton;
-    sbStop: TSpeedButton;
     sbNext: TSpeedButton;
     sbFullScreen: TSpeedButton;
     lbChannels: TListBox;
@@ -44,6 +42,7 @@ type
     tStatus: TTimer;
     sbVolume: TSpeedButton;
     tvVolume: TImageTrackBar;
+    VLC_Player: TPasLibVlcPlayer;
 
 
 
@@ -51,7 +50,6 @@ type
     procedure sbOpenClick(Sender: TObject);
     procedure sbNextClick(Sender: TObject);
     procedure sbBackClick(Sender: TObject);
-    procedure sbStopClick(Sender: TObject);
     procedure tvVolumeChange(Sender: TObject);
     procedure tStatusTimer(Sender: TObject);
     procedure sbFullScreenClick(Sender: TObject);
@@ -63,9 +61,14 @@ type
     procedure sbPlayClick(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure ImageTrackBar1Change(Sender: TObject);
+    procedure OnBuffering(Sender: TObject; cache: Single);
+    procedure OnError(Sender: TObject);
+    procedure VLC_PlayerMediaPlayerPlaying(Sender: TObject);
+    procedure OnPlaying(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
   private
     FChannels: TList<TChannelInfo>;
-    FLogoMap: TDictionary<string, Integer>; // ключ = LowerCase(LogoURL)
+    FLogoMap: TDictionary<string, Integer>; // РєР»СЋС‡ = LowerCase(LogoURL)
     FParentChanName: WideString;
     FParentChanHandle: HWND;
     FCacheDir: string;
@@ -101,7 +104,7 @@ type
 var
   frmStickyForm : TfrmStickyForm;
   ImageList: TImageList;
-
+  FButtonDir:String;
 
 
 
@@ -119,7 +122,7 @@ var
 begin
   if (FChannels = nil) or (AIndex < 0) or (AIndex >= FChannels.Count) then
   begin
-    lbStatus.Caption := 'Неправильный индекс канала';
+    lbStatus.Caption := 'РќРµРїСЂР°РІРёР»СЊРЅС‹Р№ РёРЅРґРµРєСЃ РєР°РЅР°Р»Р°';
     Exit;
   end;
 
@@ -127,20 +130,20 @@ begin
 
   if Channel.StreamURL = '' then
   begin
-    lbStatus.Caption := 'URL не найден';
+    lbStatus.Caption := 'URL РЅРµ РЅР°Р№РґРµРЅ';
     Exit;
   end;
 
-  // Обновляем статус и запускаем поток через VLC
+  // РћР±РЅРѕРІР»СЏРµРј СЃС‚Р°С‚СѓСЃ Рё Р·Р°РїСѓСЃРєР°РµРј РїРѕС‚РѕРє С‡РµСЂРµР· VLC
   lbStatus.Caption := Channel.StreamURL;
 
   try
-    // если у тебя есть путь к VLC в настройках, можно установить его:
+    // РµСЃР»Рё Сѓ С‚РµР±СЏ РµСЃС‚СЊ РїСѓС‚СЊ Рє VLC РІ РЅР°СЃС‚СЂРѕР№РєР°С…, РјРѕР¶РЅРѕ СѓСЃС‚Р°РЅРѕРІРёС‚СЊ РµРіРѕ:
     VLC_Player.VLC.Path := Form1.dePachVLC.Text;
     VLC_Player.Play(Channel.StreamURL);
   except
     on E: Exception do
-      lbStatus.Caption := 'Ошибка воспроизведения: ' + E.Message;
+      lbStatus.Caption := 'РћС€РёР±РєР° РІРѕСЃРїСЂРѕРёР·РІРµРґРµРЅРёСЏ: ' + E.Message;
   end;
 end;
 
@@ -172,7 +175,7 @@ end;
 procedure TfrmStickyForm.ImageTrackBar1Change(Sender: TObject);
 begin
    VLC_Player.SetAudioVolume(tvVolume.Position);
-   lbStatus.Caption:= 'Громкость ' + IntToStr(tvVolume.Position) + '%';
+   lbStatus.Caption:= 'Р“СЂРѕРјРєРѕСЃС‚СЊ ' + IntToStr(tvVolume.Position) + '%';
 
 end;
 
@@ -426,7 +429,7 @@ var
   Index: Integer;
 begin
   if not Assigned(Control) then
-    raise Exception.Create('Компонент не определен');
+    raise Exception.Create('РљРѕРјРїРѕРЅРµРЅС‚ РЅРµ РѕРїСЂРµРґРµР»РµРЅ');
 
   PNG := TPngImage.Create;
   try
@@ -440,7 +443,7 @@ begin
       Bmp.Canvas.Brush.Color := clWhite;
       Bmp.Canvas.FillRect(Rect(0, 0, Bmp.Width, Bmp.Height));
 
-      // Расчет пропорций
+      // Р Р°СЃС‡РµС‚ РїСЂРѕРїРѕСЂС†РёР№
       var ScaleX := Bmp.Width / PNG.Width;
       var ScaleY := Bmp.Height / PNG.Height;
       var Scale := Min(ScaleX, ScaleY);
@@ -456,7 +459,7 @@ begin
         PNG
       );
 
-      // Обработка разных типов компонентов
+      // РћР±СЂР°Р±РѕС‚РєР° СЂР°Р·РЅС‹С… С‚РёРїРѕРІ РєРѕРјРїРѕРЅРµРЅС‚РѕРІ
       if Control is TBitBtn then
       begin
         (Control as TBitBtn).Glyph.Assign(Bmp);
@@ -467,7 +470,7 @@ begin
       end
       else if Control is TButton then
       begin
-        // Создаем временный ImageList для TButton
+        // РЎРѕР·РґР°РµРј РІСЂРµРјРµРЅРЅС‹Р№ ImageList РґР»СЏ TButton
         ImageList := TImageList.Create(nil);
         try
           ImageList.Width := Control.Width;
@@ -487,12 +490,38 @@ begin
   end;
 end;
 
+procedure TfrmStickyForm.OnPlaying(Sender: TObject);
+begin
+  lbStatus.Caption := '';
+end;
+
+
+procedure TfrmStickyForm.OnBuffering(Sender: TObject; cache: Single);
+begin
+  if Trunc(cache) < 100 then
+    lbStatus.Caption := Format('Р‘СѓС„РµСЂРёР·Р°С†РёСЏ: %d%%', [Trunc(cache)])
+  else
+    lbStatus.Caption := 'Р’РѕСЃРїСЂРѕРёР·РІРµРґРµРЅРёРµ...';
+
+end;
+
+procedure TfrmStickyForm.OnError(Sender: TObject);
+begin
+  lbStatus.Caption := 'РћС€РёР±РєР° РІРѕСЃРїСЂРѕРёР·РІРµРґРµРЅРёСЏ!';
+end;
 
 
 procedure TfrmStickyForm.N1Click(Sender: TObject);
 begin
   Form1.Show;
   GetChannels;
+end;
+
+procedure TfrmStickyForm.FormCreate(Sender: TObject);
+begin
+  VLC_Player.StartOptions.Add('--network-caching=300');
+  VLC_Player.StartOptions.Add('--no-drop-late-frames');
+  VLC_Player.StartOptions.Add('--no-skip-frames');
 end;
 
 procedure TfrmStickyForm.FormDestroy(Sender: TObject);
@@ -503,14 +532,12 @@ begin
     VLC_Player.Stop;
   except
     on E: Exception do
-      lbStatus.Caption := 'Ошибка при очистке VLC: ' + E.Message;
+      lbStatus.Caption := 'РћС€РёР±РєР° РїСЂРё РѕС‡РёСЃС‚РєРµ VLC: ' + E.Message;
   end;
 end;
 
 
 procedure TfrmStickyForm.FormShow(Sender: TObject);
-var
-  FButtonDir:String;
 begin
 
     Randomize;
@@ -532,16 +559,16 @@ begin
     FButtonDir := Form1.lePachStyle.Text + 'image-button\';
 
     ForceDirectories(FCacheDir);
-    //Сделать проверку на существование файла
+    //РЎРґРµР»Р°С‚СЊ РїСЂРѕРІРµСЂРєСѓ РЅР° СЃСѓС‰РµСЃС‚РІРѕРІР°РЅРёРµ С„Р°Р№Р»Р°
     if not FileExists(Form1.edURLM3U.Text) then
       else
     ParseM3U(Form1.edURLM3U.Text);
 
     if not DirectoryExists(FCacheDir) then
-       ShowMessage('Создайте папку для кэша картинок "logo-channels"');
+       ShowMessage('РЎРѕР·РґР°Р№С‚Рµ РїР°РїРєСѓ РґР»СЏ РєСЌС€Р° РєР°СЂС‚РёРЅРѕРє "logo-channels"');
 
    if not DirectoryExists(FCacheDir) then
-      ShowMessage('Не найдена папка с иконками для кнопок "image-button"')
+      ShowMessage('РќРµ РЅР°Р№РґРµРЅР° РїР°РїРєР° СЃ РёРєРѕРЅРєР°РјРё РґР»СЏ РєРЅРѕРїРѕРє "image-button"')
     else
    begin
     LoadPNGToControl(FButtonDir + 'backward.png', sbBack);
@@ -549,13 +576,15 @@ begin
     LoadPNGToControl(FButtonDir + 'forwards.png', sbNext);
     LoadPNGToControl(FButtonDir + 'film-list.png', sbOpen);
     LoadPNGToControl(FButtonDir + 'play.png', sbPlay);
-    LoadPNGToControl(FButtonDir + 'stop-playing.png', sbStop);
     LoadPNGToControl(FButtonDir + 'volume-mute.png', sbVolume);
 
     tvVolume.TrackFile := FButtonDir + 'track.png';
     tvVolume.ThumbFile := FButtonDir + 'thumb-48.png';
    end;
 
+  VLC_Player.OnMediaPlayerBuffering := OnBuffering;
+  VLC_Player.OnMediaPlayerEncounteredError := OnError;
+  VLC_Player.OnMediaPlayerPlaying := OnPlaying;
 end;
 
 procedure TfrmStickyForm.C1Click(Sender: TObject);
@@ -618,20 +647,20 @@ var
 begin
   if (FChannels = nil) or (FChannels.Count = 0) then
   begin
-    lbStatus.Caption := 'Список каналов пуст';
+    lbStatus.Caption := 'РЎРїРёСЃРѕРє РєР°РЅР°Р»РѕРІ РїСѓСЃС‚';
     Exit;
   end;
 
   idx := lbChannels.ItemIndex;
 
-  // если ничего не выбрано — стартуем с последнего
+  // РµСЃР»Рё РЅРёС‡РµРіРѕ РЅРµ РІС‹Р±СЂР°РЅРѕ вЂ” СЃС‚Р°СЂС‚СѓРµРј СЃ РїРѕСЃР»РµРґРЅРµРіРѕ
   if idx < 0 then
     idx := FChannels.Count - 1
   else
   begin
-    Dec(idx); // шаг назад
+    Dec(idx); // С€Р°Рі РЅР°Р·Р°Рґ
     if idx < 0 then
-      idx := FChannels.Count - 1; // зацикливаем в конец
+      idx := FChannels.Count - 1; // Р·Р°С†РёРєР»РёРІР°РµРј РІ РєРѕРЅРµС†
   end;
 
   lbChannels.ItemIndex := idx;
@@ -688,20 +717,20 @@ var
 begin
   if (FChannels = nil) or (FChannels.Count = 0) then
   begin
-    lbStatus.Caption := 'Список каналов пуст';
+    lbStatus.Caption := 'РЎРїРёСЃРѕРє РєР°РЅР°Р»РѕРІ РїСѓСЃС‚';
     Exit;
   end;
 
   idx := lbChannels.ItemIndex;
 
-  // если ничего не выбрано — стартуем с первого
+  // РµСЃР»Рё РЅРёС‡РµРіРѕ РЅРµ РІС‹Р±СЂР°РЅРѕ вЂ” СЃС‚Р°СЂС‚СѓРµРј СЃ РїРµСЂРІРѕРіРѕ
   if idx < 0 then
     idx := 0
   else
   begin
-    Inc(idx); // шаг вперёд
+    Inc(idx); // С€Р°Рі РІРїРµСЂС‘Рґ
     if idx >= FChannels.Count then
-      idx := 0; // зацикливаем в начало
+      idx := 0; // Р·Р°С†РёРєР»РёРІР°РµРј РІ РЅР°С‡Р°Р»Рѕ
   end;
 
   lbChannels.ItemIndex := idx;
@@ -721,26 +750,41 @@ end;
 procedure TfrmStickyForm.sbPlayClick(Sender: TObject);
 var
   idx: Integer;
+  state: TPasLibVlcPlayerState;
 begin
-  idx := lbChannels.ItemIndex;
+  state := Vlc_Player.GetState;
 
-  // если ничего не выбрано, пробуем выбрать первый
-  if (idx < 0) and (FChannels <> nil) and (FChannels.Count > 0) then
+  if state = plvPlayer_Playing then
   begin
-    idx := 0;
-    lbChannels.ItemIndex := idx;
-  end;
+    // вЏ№ Р•СЃР»Рё СѓР¶Рµ РёРіСЂР°РµС‚ вЂ” РѕСЃС‚Р°РЅР°РІР»РёРІР°РµРј
+    VLC_Player.Stop;
 
-  if (idx >= 0) and (idx < FChannels.Count) then
-    PlayChannelByIndex(idx)
+    LoadPNGToControl(FButtonDir + 'play.png', sbPlay);
+    lbStatus.Caption := 'РћСЃС‚Р°РЅРѕРІР»РµРЅРѕ';
+  end
   else
-    lbStatus.Caption := 'Список каналов пуст';
+  begin
+    // в–¶пёЏ РРЅР°С‡Рµ Р·Р°РїСѓСЃРєР°РµРј
+    idx := lbChannels.ItemIndex;
+
+    if (idx < 0) and (FChannels <> nil) and (FChannels.Count > 0) then
+    begin
+      idx := 0;
+      lbChannels.ItemIndex := idx;
+    end;
+
+    if (idx >= 0) and (idx < FChannels.Count) then
+    begin
+      PlayChannelByIndex(idx);
+      LoadPNGToControl(FButtonDir + 'stop-playing.png', sbPlay);
+      lbStatus.Caption := 'Р’РѕСЃРїСЂРѕРёР·РІРµРґРµРЅРёРµ...';
+    end
+    else
+      lbStatus.Caption := 'РЎРїРёСЃРѕРє РєР°РЅР°Р»РѕРІ РїСѓСЃС‚';
+  end;
 end;
 
-procedure TfrmStickyForm.sbStopClick(Sender: TObject);
-begin
-   VLC_Player.Stop();
-end;
+
 
 procedure TfrmStickyForm.SetParentChanHandle(const Value: HWND);
 begin
@@ -763,13 +807,13 @@ begin
 
   case VLC_Player.GetState() of
     plvPlayer_NothingSpecial: stateName := '';
-    plvPlayer_Opening:        stateName := 'Открытие потока';
-    plvPlayer_Buffering:      stateName := 'Буфирация';
+    plvPlayer_Opening:        stateName := 'РћС‚РєСЂС‹С‚РёРµ РїРѕС‚РѕРєР°';
+    plvPlayer_Buffering:      stateName := 'Р‘СѓС„РёСЂР°С†РёСЏ';
 //    plvPlayer_Playing:        stateName :=  TVProgramm;
-    plvPlayer_Paused:         stateName := 'Пауза';
-    plvPlayer_Stopped:        stateName := 'Остановлено';
+    plvPlayer_Paused:         stateName := 'РџР°СѓР·Р°';
+    plvPlayer_Stopped:        stateName := 'РћСЃС‚Р°РЅРѕРІР»РµРЅРѕ';
     plvPlayer_Ended:          stateName := '';
-    plvPlayer_Error:          stateName := 'Ошибка загрузки потока';
+    plvPlayer_Error:          stateName := 'РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РїРѕС‚РѕРєР°';
     else                      stateName := '';
   end;
 
@@ -782,7 +826,14 @@ end;
 procedure TfrmStickyForm.tvVolumeChange(Sender: TObject);
 begin
   VLC_Player.SetAudioVolume(tvVolume.Position);
-  lbStatus.Caption := 'Громкость ' + IntToStr(tvVolume.Position) + '%'
+  lbStatus.Caption := 'Р“СЂРѕРјРєРѕСЃС‚СЊ ' + IntToStr(tvVolume.Position) + '%'
+end;
+
+
+
+procedure TfrmStickyForm.VLC_PlayerMediaPlayerPlaying(Sender: TObject);
+begin
+  lbStatus.Caption := '';
 end;
 
 initialization
