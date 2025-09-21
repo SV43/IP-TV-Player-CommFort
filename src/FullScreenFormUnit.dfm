@@ -12,12 +12,10 @@ object FullScreenForm: TFullScreenForm
   Font.Name = 'Segoe UI'
   Font.Style = []
   KeyPreview = True
-  OldCreateOrder = False
   Touch.GestureManager = GestureManager1
   Touch.InteractiveGestureOptions = [igoPanSingleFingerHorizontal, igoPanInertia, igoParentPassthrough]
   WindowState = wsMaximized
   OnKeyPress = FormKeyPress
-  PixelsPerInch = 96
   TextHeight = 25
   object ActionList1: TActionList
     Left = 120

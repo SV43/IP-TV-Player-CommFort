@@ -6,7 +6,7 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.ExtCtrls, Vcl.StdCtrls,
   Vcl.Imaging.pngimage, System.Actions, Vcl.ActnList, Vcl.Touch.GestureMgr,
-  Vcl.Buttons,uStickyForm, Vcl.ComCtrls;
+  Vcl.Buttons, Vcl.ComCtrls;
 
 type
   TFullScreenForm = class(TForm)
@@ -30,7 +30,7 @@ implementation
 
 {$R *.dfm}
 
-Uses  Unit1;
+
 
 
 
