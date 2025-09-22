@@ -65,7 +65,7 @@ begin
       Append(LogFile)
     else
       Rewrite(LogFile);
-    Writeln(LogFile, FormatDateTime('[dd.mm.yyyy hh:nn:ss.zzz]', Now) + ' - ' + S);
+    Writeln(LogFile, FormatDateTime('[dd.mm.yyyy hh:nn:ss]', Now) + ' - ' + S);
     CloseFile(LogFile);
 
     OutputDebugString(PChar('IPTV_Plugin: ' + S));

@@ -115,6 +115,20 @@ object frmStickyForm: TfrmStickyForm
       OnClick = sbVolumeClick
       ExplicitLeft = 1010
     end
+    object lbEPGStatus: TLabel
+      Left = 230
+      Top = 1
+      Width = 5
+      Height = 51
+      Align = alLeft
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWindowText
+      Font.Height = -13
+      Font.Name = 'MS Sans Serif'
+      Font.Style = [fsBold]
+      ParentFont = False
+      ExplicitHeight = 16
+    end
     object tvVolume: TImageTrackBar
       Left = 805
       Top = 1
@@ -172,6 +186,7 @@ object frmStickyForm: TfrmStickyForm
       AutoCheck = True
       Caption = #1057#1087#1080#1089#1086#1082' '#1082#1072#1085#1072#1083#1086#1074
       Checked = True
+      OnClick = C1Click
     end
     object N1: TMenuItem
       Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080

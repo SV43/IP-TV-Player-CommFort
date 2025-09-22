@@ -122,6 +122,10 @@
             <Form>frmSettings</Form>
             <FormType>dfm</FormType>
         </DCCReference>
+        <DCCReference Include="dcu\NativeXml.pas"/>
+        <DCCReference Include="dcu\sdStreams.pas"/>
+        <DCCReference Include="dcu\sdDebug.pas"/>
+        <DCCReference Include="dcu\sdStringTable.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
