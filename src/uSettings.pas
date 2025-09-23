@@ -17,7 +17,6 @@ type
     lbCCaptionChanel: TLabel;
     cbIPTVchan: TComboBox;
     edURLM3U: TLabeledEdit;
-    edURLJTV: TLabeledEdit;
     pnButton: TPanel;
     btSave: TButton;
     lePachStyle: TLabeledEdit;
@@ -28,6 +27,8 @@ type
     llGitHubSource: TLinkLabel;
     edGitHub: TEdit;
     lbYer: TLabel;
+    cbJTV: TCheckBox;
+    Label1: TLabel;
     procedure FormShow(Sender: TObject);
     procedure btSaveClick(Sender: TObject);
 

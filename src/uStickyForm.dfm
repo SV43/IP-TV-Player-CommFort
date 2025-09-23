@@ -15,7 +15,6 @@ object frmStickyForm: TfrmStickyForm
   Font.Style = []
   OnCreate = FormCreate
   OnDestroy = FormDestroy
-  OnPaint = FormPaint
   OnShow = FormShow
   TextHeight = 13
   object Splitter: TSplitter
@@ -89,20 +88,20 @@ object frmStickyForm: TfrmStickyForm
     end
     object lbStatus: TLabel
       AlignWithMargins = True
-      Left = 220
+      Left = 230
       Top = 4
-      Width = 7
+      Width = 4
       Height = 45
       Margins.Left = 15
       Align = alLeft
-      Font.Charset = DEFAULT_CHARSET
+      Font.Charset = RUSSIAN_CHARSET
       Font.Color = clWindowText
-      Font.Height = -19
-      Font.Name = 'MS Sans Serif'
+      Font.Height = -12
+      Font.Name = '@Arial Unicode MS'
       Font.Style = [fsBold]
       ParentFont = False
       Layout = tlCenter
-      ExplicitHeight = 24
+      ExplicitHeight = 16
     end
     object sbVolume: TSpeedButton
       AlignWithMargins = True
@@ -115,18 +114,20 @@ object frmStickyForm: TfrmStickyForm
       OnClick = sbVolumeClick
       ExplicitLeft = 1010
     end
-    object lbEPGStatus: TLabel
-      Left = 230
-      Top = 1
-      Width = 5
-      Height = 51
+    object lbEPG_Text: TLabel
+      AlignWithMargins = True
+      Left = 208
+      Top = 4
+      Width = 4
+      Height = 45
       Align = alLeft
-      Font.Charset = DEFAULT_CHARSET
+      Font.Charset = ANSI_CHARSET
       Font.Color = clWindowText
-      Font.Height = -13
-      Font.Name = 'MS Sans Serif'
+      Font.Height = -12
+      Font.Name = '@Arial Unicode MS'
       Font.Style = [fsBold]
       ParentFont = False
+      Layout = tlCenter
       ExplicitHeight = 16
     end
     object tvVolume: TImageTrackBar
@@ -156,8 +157,6 @@ object frmStickyForm: TfrmStickyForm
       PopupMenu = pmMenu
       OnDblClick = VLC_PlayerDblClick
       SnapShotFmt = 'png'
-      OnMediaPlayerPlaying = VLC_PlayerMediaPlayerPlaying
-      MouseEventsHandler = mehComponent
     end
   end
   object lbChannels: TListBox

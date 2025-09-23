@@ -3,7 +3,7 @@ object frmSettings: TfrmSettings
   Top = 0
   BorderIcons = [biSystemMenu]
   Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
-  ClientHeight = 324
+  ClientHeight = 330
   ClientWidth = 394
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -17,11 +17,11 @@ object frmSettings: TfrmSettings
     Left = 0
     Top = 0
     Width = 394
-    Height = 283
+    Height = 289
     ActivePage = tsSettings
     Align = alClient
     TabOrder = 0
-    ExplicitHeight = 321
+    ExplicitHeight = 283
     object tsSettings: TTabSheet
       Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
       object lbCCaptionChanel: TLabel
@@ -30,6 +30,19 @@ object frmSettings: TfrmSettings
         Width = 212
         Height = 13
         Caption = #1050#1072#1085#1072#1083' '#1074' '#1082#1086#1090#1086#1088#1086#1084' '#1073#1091#1076#1077#1090' '#1088#1072#1073#1086#1090#1072#1090#1100' '#1087#1083#1072#1075#1080#1085':'
+      end
+      object Label1: TLabel
+        Left = 40
+        Top = 224
+        Width = 253
+        Height = 13
+        Caption = '* '#1055#1088#1080' '#1073#1086#1083#1100#1096#1086#1084' m3u '#1083#1080#1089#1090#1077' '#1079#1085#1072#1095#1080#1090#1077#1083#1100#1085#1072#1103' '#1085#1072#1075#1088#1091#1079#1082#1072
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clRed
+        Font.Height = -11
+        Font.Name = 'Tahoma'
+        Font.Style = []
+        ParentFont = False
       end
       object dePachVLC: TLabeledEdit
         Left = 24
@@ -60,17 +73,6 @@ object frmSettings: TfrmSettings
         TabOrder = 2
         Text = ''
       end
-      object edURLJTV: TLabeledEdit
-        Left = 24
-        Top = 216
-        Width = 329
-        Height = 21
-        EditLabel.Width = 162
-        EditLabel.Height = 13
-        EditLabel.Caption = #1055#1091#1090#1100' '#1076#1086' '#1092#1072#1081#1083#1072' '#1090#1077#1083#1077#1087#1088#1086#1075#1088#1072#1084#1084#1099':'
-        TabOrder = 3
-        Text = ''
-      end
       object lePachStyle: TLabeledEdit
         Left = 24
         Top = 77
@@ -79,8 +81,18 @@ object frmSettings: TfrmSettings
         EditLabel.Width = 133
         EditLabel.Height = 13
         EditLabel.Caption = #1055#1091#1090#1100' '#1076#1086' '#1092#1072#1081#1083#1086#1074' '#1096#1072#1073#1083#1086#1085#1072':'
-        TabOrder = 4
+        TabOrder = 3
         Text = ''
+      end
+      object cbJTV: TCheckBox
+        Left = 24
+        Top = 208
+        Width = 329
+        Height = 17
+        Caption = #1057#1082#1072#1095#1080#1074#1072#1090#1100' '#1058#1042' '#1087#1088#1086#1075#1088#1072#1084#1084#1091' '#1077#1089#1083#1080' '#1086#1085#1072' '#1087#1088#1086#1087#1080#1089#1072#1085#1072' '#1074' M3U'
+        Checked = True
+        State = cbChecked
+        TabOrder = 4
       end
     end
     object tsAbout: TTabSheet
@@ -259,12 +271,12 @@ object frmSettings: TfrmSettings
   end
   object pnButton: TPanel
     Left = 0
-    Top = 283
+    Top = 289
     Width = 394
     Height = 41
     Align = alBottom
     TabOrder = 1
-    ExplicitTop = 321
+    ExplicitTop = 283
     object btSave: TButton
       Left = 128
       Top = 8

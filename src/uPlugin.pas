@@ -94,7 +94,7 @@ begin
     Ini.WriteString('Settings','Style', frmSettings.lePachStyle.Text);
     Ini.WriteString('Settings','Chann IPTV Plug', frmSettings.cbIPTVchan.Text);
     Ini.WriteString('Settings','URL M3U', frmSettings.edURLM3U.Text);
-    Ini.WriteString('Settings','URL JTV', frmSettings.edURLJTV.Text);
+    ini.WriteBool('Settings', 'LoadEPG', frmSettings.cbJTV.Checked);
   finally
     Ini.Free;
   end;
@@ -111,7 +111,7 @@ begin
     frmSettings.lePachStyle.Text := Ini.ReadString('Settings', 'Style', path + 'IPTV_Plugin\style\');
     frmSettings.cbIPTVchan.Text := Ini.ReadString('Settings', 'Chann IPTV Plug','IP-TV');
     frmSettings.edURLM3U.Text   := Ini.ReadString('Settings', 'URL M3U','');
-    frmSettings.edURLJTV.Text   := Ini.ReadString('Settings', 'URL JTV','https://site.ru/jtv.zip2');
+    frmSettings.cbJTV.Checked := Ini.ReadBool('Settings', 'LoadEPG', True);
   finally
     Ini.Free;
   end;
