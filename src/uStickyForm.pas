@@ -750,6 +750,7 @@ begin
   else
     lbStatus.Caption := 'Воспроизведение...';
     lbEPG_Text.Caption := '';
+    EpgStatus;
 end;
 
 procedure TfrmStickyForm.OnError(Sender: TObject);
