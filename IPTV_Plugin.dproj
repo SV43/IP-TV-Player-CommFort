@@ -80,11 +80,11 @@
     <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
         <OutputExt>cfplug</OutputExt>
         <Debugger_HostApplication>C:\Program Files (x86)\CommFort\CommFort.exe</Debugger_HostApplication>
-        <DCC_UnitSearchPath>C:\Delphi\Source\IPTV-Без сервера\dcu\;C:\Delphi\Source\IPTV-Без сервера_10.09.2025\IPTV-Без сервера\dcu;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>C:\Delphi\Source\2025\IP-TV-Player-CommFort\dcu;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_ExeOutput>C:\Program Files (x86)\CommFort\Plugins\</DCC_ExeOutput>
         <Manifest_File>None</Manifest_File>
         <AppDPIAwarenessMode>none</AppDPIAwarenessMode>
-        <DCC_BplOutput>C:\Delphi\Source\IPTV-Без сервера_10.09.2025\IPTV-Без сервера\dcu\</DCC_BplOutput>
+        <DCC_BplOutput>C:\Delphi\Source\2025\IP-TV-Player-CommFort\dcu\</DCC_BplOutput>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <DCC_DebugInfoInExe>true</DCC_DebugInfoInExe>
@@ -126,6 +126,7 @@
         <DCCReference Include="dcu\sdStreams.pas"/>
         <DCCReference Include="dcu\sdDebug.pas"/>
         <DCCReference Include="dcu\sdStringTable.pas"/>
+        <DCCReference Include="dcu\PasLibVlcUnit.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

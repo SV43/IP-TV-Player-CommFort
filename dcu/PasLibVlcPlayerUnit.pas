@@ -47,7 +47,7 @@
  *
  *)
 
-{$I \source\compiler.inc}
+{$I compiler.inc}
 
 unit PasLibVlcPlayerUnit;
 

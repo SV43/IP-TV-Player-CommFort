@@ -1,4 +1,65 @@
-﻿2018.04.26 Correct version comment
+2024.01.15 merge changes reported by Javier Cuevas
+
+           modified procedure:
+                procedure TPasLibVlcPlayer.WmMediaPlayerMediaChanged(var m: TVlcMessage);
+
+2020.07.05 Switch to MIT licence, and try prepare to support v4
+
+2019.03.24 Modify Stop procedure
+
+           inspired by Rob Renaud <jgrenaud74@gmail.com>
+
+           modified procedure:
+            
+                procedure Stop(const stopTimeOut : Cardinal = 1000);
+				
+2018.09.18 Fix Play declaration for compatible with D4
+
+2018.07.13 Fix resize bug under FPC 1.8.x
+
+           reported by Mukataï Mukatai <mukatai@msn.com>
+
+           affected procedures:
+
+                procedure WMEraseBkgnd(var msg: ...); message ...;
+
+2018.07.01 Add support for media callbacks
+
+           inspired by Mark Adamson <markadamson83@gmail.com>
+
+           new procedure:
+            
+                procedure Play(stm : TStream, ...); overload;
+
+2018.06.29 Remove duplicated code
+
+           affected procedures:
+            
+                procedure Play       (...); overload;
+                procedure PlayNormal (...); overload;
+                procedure PlayYoutube(...); overload;
+
+2018.06.25 Fix copy paste bug
+
+           reported by bnop90 <bnop90@mail.ru>
+
+           affected procedures:
+
+                procedure Play(mrl: WideString; mediaOptions : array of WideString; ...); overload;
+
+2018.06.11 Extend parameters:
+
+           inspired by Wortmann Sándor <wortmann@visualsolutions.hu>
+
+           affected procedures:
+
+                procedure TPasLibVlcMediaList.Add(mrl : WideString; mediaOptions : array of WideString);
+
+2018.06.05 Correct PlayYoutube
+
+           reported by Ahmet Yeşilçimen <yesilcimenahmet@gmail.com>
+
+2018.04.26 Correct version comment
 
 2018.03.11 Update for better compatibility with libvlc 3.0.0
 

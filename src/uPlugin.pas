@@ -237,6 +237,7 @@ begin
     on E: Exception do
       DebugMsg('PluginStop ERROR: ' + E.Message);
   end;
+  frmStickyForm.FStopRequested := True;
 end;
 
 // =======================================================

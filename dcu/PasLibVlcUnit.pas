@@ -1,4 +1,4 @@
-(*
+﻿(*
  *******************************************************************************
  * PasLibVlcUnit.pas - pascal interface for VideoLAN libvlc 3.0.20
  *
@@ -181,6 +181,18 @@ type
  *)
 
 type
+  libvlc_log_message_t = record
+    i_severity: Integer;
+    psz_type: PAnsiChar;
+    psz_name: PAnsiChar;
+    psz_header: PAnsiChar;
+    psz_message: PAnsiChar;
+  end;
+
+  libvlc_log_message_t_ptr = ^libvlc_log_message_t;
+
+
+type
 {$IFDEF CPUX64}
   libvlc_size_t  = UInt64;
   libvlc_ssize_t = Int64;
@@ -193,6 +205,10 @@ type
   libvlc_instance_t_ptr            = type Pointer;
   libvlc_log_t_ptr                 = type Pointer;
   libvlc_log_iterator_t_ptr        = type Pointer;
+
+  // Aliases for compatibility
+  libvlc_log_t = libvlc_log_t_ptr;
+  libvlc_log_iterator_t = libvlc_log_iterator_t_ptr;
   libvlc_media_t_ptr               = type Pointer;
   libvlc_media_player_t_ptr        = type Pointer;
   libvlc_media_list_t_ptr          = type Pointer;
@@ -1884,7 +1900,7 @@ var
  * return  verbosity level for messages
  *)
 
-{$IFDEF USE_VLC_DEPRECATED_API}
+////{$IFDEF USE_VLC_DEPRECATED_API}
 
 var
   libvlc_get_log_verbosity : function(
@@ -2004,7 +2020,7 @@ var
     p_buffer : libvlc_log_message_t_ptr
   ) : libvlc_log_message_t_ptr; cdecl;
 
-{$ENDIF}
+///{$ENDIF}
 
 (**
  * Description of a module.

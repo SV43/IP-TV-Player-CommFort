@@ -11,7 +11,8 @@ uses
   NativeXml in 'dcu\NativeXml.pas',
   sdStreams in 'dcu\sdStreams.pas',
   sdDebug in 'dcu\sdDebug.pas',
-  sdStringTable in 'dcu\sdStringTable.pas';
+  sdStringTable in 'dcu\sdStringTable.pas',
+  PasLibVlcUnit in 'dcu\PasLibVlcUnit.pas';
 
 //{$LIBVERSION 'cfplug'}
 

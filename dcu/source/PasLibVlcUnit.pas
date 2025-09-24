@@ -193,6 +193,10 @@ type
   libvlc_instance_t_ptr            = type Pointer;
   libvlc_log_t_ptr                 = type Pointer;
   libvlc_log_iterator_t_ptr        = type Pointer;
+
+  // Aliases for compatibility
+  libvlc_log_t = libvlc_log_t_ptr;
+  libvlc_log_iterator_t = libvlc_log_iterator_t_ptr;
   libvlc_media_t_ptr               = type Pointer;
   libvlc_media_player_t_ptr        = type Pointer;
   libvlc_media_list_t_ptr          = type Pointer;

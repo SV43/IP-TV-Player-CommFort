@@ -1,0 +1,70 @@
+﻿#EXTM3U url-tvg="https://iptvx.one/epg/epg_lite.xml.gz; http://gabbarit.drm-play.com/epg_lite.xml.gz"
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Первый канал.png" tvg-id="pervy",Первый канал HD
+https://river-ost-rtk-521.rtbcdn.ru/stream/genetta-303.m9.rutube.ru/QDrzomX9Wr-Cf9V7336Esw/1759065390/c58f502c7bb34a8fcdd976b221fca292/720p_stream.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Россия 1.png" tvg-id="rossia1",Россия 1 HD
+https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/russia1-hd/1080p.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Матч! ТВ.png" tvg-id="match-tv",Матч ТВ
+https://river-m9-rtk-353.rtbcdn.ru/stream/genetta-511.ost.rutube.ru/6PPV_IBBF1tNXIaObp7E4w/1759065204/11bbbec75a2ceb8cf446ad16813c6eec/1080p_stream.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/НТВ.png" tvg-id="ntv",НТВ HD
+http://cdn2.ntv.ru/ntv0_hd/tracks-v1a1/mono.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Пятый канал.png" tvg-id="5kanal-ru",Пятый канал
+https://edge02p.mediavitrina.ru/hls-livef8/5tv/tracks-v2a1/mono.ts.m3u8?token=v2.f0b9RY8PvMmslj7XYI7N17Uz8GtWBD7ZhhAw6GDaiug.deACy9qcQFUKPGHTvprHtJhF4anHN7Fmz120ji4MiLE.1759057256.a459ada3201e98f36c384ee616697b4c
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Россия Культура.png" tvg-id="kultura",Россия-Культура
+https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/kultura-hd/track_105_319a299f/chunklist.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Россия 24.png" tvg-id="rossia-24",Россия 24
+https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/russia24-hd/1080p.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Карусель.png" tvg-id="karusel",Карусель
+http://178.163.51.173:4022/udp/234.0.0.203:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/ОТР.png" tvg-id="otr",ОТР
+https://river-ost-rtk-543.rtbcdn.ru/stream/genetta-315.m9.rutube.ru/CSRIs9Csc1AgYHDbTQzUQg/1759174435/faa934385b83f9e8a92f5484defae5fa/720p_stream.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/ТВЦ.png" tvg-id="tvcentr",ТВЦ
+https://user85726.clients-cdnnow.ru/hls-livef7/tvc/tracks-v2a1/mono.m3u8?token=v2.TtokjWFHaX7wRoWMk2jFwOo00-DLckkP7UB2Eb6p-SU.-Offecn2gZxuNdPiqjdkJ1fvSyCPMHU1ceVvKvSPCww.1759056721.4fbde9d6fe50e30e9867bf8f20c088a7
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/РенТВ.png" tvg-id="rentv",РЕН ТВ HD
+https://edge01p.mediavitrina.ru/hls-livef1/ren-tv/tracks-v2a1/mono.m3u8?token=v2.x4RoqyfhT7QP1vVfFqO546rplNVV-4O4FTbPVnCdaJQ.4bEu7iKmsoi9XYn15NUOK2T2TmUGOf-nGnwW_TmqXZU.1759058156.9f440186fb77656d3a9d68a50b9076b3
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Спас.png" tvg-id="spas",Спас
+http://178.163.51.173:4022/udp/234.0.0.215:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/СТС.png" tvg-id="sts",СТС
+https://ctc-live-vitrina.cdn.gblnet.ru/hls-livef2/ctc/tracks-v2a1/mono.ts.m3u8?token=v2.0mgSDfOL82yPb_tPvT8b7SGpyksuAiMuO-q4ERkq4No.Mbi5hIIxMxYTW22fb127_esmCSvXY1g918mweoV2n7s.1759070503.901ea0d3e2f53b5c36ef28b9819e6299
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Домашний.png" tvg-id="domashny",Домашний
+http://178.163.51.173:4022/udp/234.0.0.191:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/ТВ3 ru.png" tvg-id="tv3-ru",ТВ-3
+http://178.163.51.173:4022/udp/234.0.0.171:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Пятница!.png" tvg-id="piatnica",Пятница!
+http://178.163.51.173:4022/udp/234.0.0.235:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Звезда.png" tvg-id="zvezda",Звезда
+http://178.163.51.173:4022/udp/234.0.0.237:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Мир.png" tvg-id="mir",Мир
+http://178.163.51.173:4022/udp/234.0.0.5:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/ТНТ.png" tvg-id="tnt",ТНТ
+https://river-m9-rtk-353.rtbcdn.ru/stream/genetta-319.m9.rutube.ru/GxQRhFeZRaqLxkIj_vCUng/1759177705/546602986e6a424d74d594876ddb3f04/720p_stream.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/МузТВ.png" tvg-id="muztv",Муз-ТВ
+http://178.163.51.173:4022/udp/234.0.0.96:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Че!.png" tvg-id="che",Че!
+http://178.212.71.253:8002/play/a00s/index.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Шансон ТВ.png" tvg-id="shansontv",Шансон ТВ
+http://hls.shansontv.cdnvideo.ru/shansontv/smil:shansontv.smil/playlist.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/KroneHit TV.png" tvg-id="kronehit",KroneHit TV
+http://bitcdn-kronehit.bitmovin.com/v2/hls/chunklist_b1628000.m3u8

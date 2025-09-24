@@ -1,4 +1,42 @@
-﻿2018.05.02 Redesign dataflow, more buffers, more locks = better stability
+2020.07.05 Switch to MIT licence, and try prepare to support v4
+
+2019.03.24 Modify Stop procedure
+
+           inspired by Rob Renaud <jgrenaud74@gmail.com>
+
+           new procedure:
+            
+                procedure Stop(const stopTimeOut : Cardinal = 1000);
+
+2019.01.08 Add support for events:
+
+      libvlc_MediaPlayerESAdded
+      libvlc_MediaPlayerESDeleted
+      libvlc_MediaPlayerESSelected
+      libvlc_MediaPlayerAudioDevice
+      libvlc_MediaPlayerChapterChanged
+      libvlc_RendererDiscovererItemAdded
+      libvlc_RendererDiscovererItemDeleted
+
+2018.07.01 Add support for media callbacks
+
+           inspired by Mark Adamson <markadamson83@gmail.com>
+
+           new procedure:
+            
+                procedure Play(stm : TStream, ...); overload;
+
+2018.06.29 Remove duplicated code
+
+           affected procedures:
+            
+                procedure Play       (...); overload;
+                procedure PlayNormal (...); overload;
+                procedure PlayYoutube(...); overload;
+
+2018.06.05 Correct PlayYoutube
+
+           reported by Ahmet Yeşilçimen <yesilcimenahmet@gmail.com>
 
 2018.04.26 Correct usage of video callbacks
 

@@ -13,8 +13,10 @@ object frmStickyForm: TfrmStickyForm
   Font.Height = -11
   Font.Name = 'MS Sans Serif'
   Font.Style = []
+  OnCloseQuery = FormCloseQuery
   OnCreate = FormCreate
   OnDestroy = FormDestroy
+  OnPaint = FormPaint
   OnShow = FormShow
   TextHeight = 13
   object Splitter: TSplitter
@@ -136,7 +138,6 @@ object frmStickyForm: TfrmStickyForm
       Width = 200
       Height = 51
       Align = alRight
-      Max = 200
       Position = 100
       OnChange = ImageTrackBar1Change
     end
