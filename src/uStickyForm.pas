@@ -712,29 +712,38 @@ var
   idx: Integer;
   cur: string;
   state: TPasLibVlcPlayerState;
+  ch: TChannelInfo;
 begin
+  if not Assigned(Vlc_Player) then
+    Exit;
+
   state := Vlc_Player.GetState;
-  if state = plvPlayer_Playing then
+  if state <> plvPlayer_Playing then
+    Exit;
+
+  idx := lbChannels.ItemIndex;
+  if (idx < 0) or (idx >= FChannels.Count) then
+    Exit;
+
+  ch := FChannels[idx];
+  if not Assigned(ch) then
+    Exit;
+
+  cur := Trim(ch.CurrentTitle);
+
+  if cur = '' then
+    cur := 'Нет актуальных данных'
+  else
   begin
-    idx := lbChannels.ItemIndex;
-    if (idx < 0) or (idx >= FChannels.Count) then
-      Exit;
-
-    cur := Trim(FChannels[idx].CurrentTitle);
-
-    if cur = '' then
-      cur := 'Нет актуальных данных'
-    else
-    begin
-      var p := Pos('(', cur);
-      if p > 0 then
-        cur := Trim(Copy(cur, 1, p - 1));
-    end;
-
-    lbEPG_Text.Caption := 'Сейчас: ' + cur;
+    var p := Pos('(', cur);
+    if p > 0 then
+      cur := Trim(Copy(cur, 1, p - 1));
   end;
 
+  if Assigned(lbEPG_Text) then
+    lbEPG_Text.Caption := 'Сейчас: ' + cur;
 end;
+
 
 
 
@@ -1268,6 +1277,7 @@ begin
   finally
     HttpClient.Free;
   end;
+  if not FStopRequested then
   EpgStatus;
 end;
 
