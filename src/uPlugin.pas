@@ -218,6 +218,7 @@ begin
   try
     if Assigned(frmStickyForm) then
     begin
+      frmStickyForm.FStopRequested := True;
       frmStickyForm.VLC_Player.Stop;
       ChatPanelSize := GetChatPanelSize();
       if frmStickyForm.ParentChanHandle <> 0 then
@@ -237,7 +238,6 @@ begin
     on E: Exception do
       DebugMsg('PluginStop ERROR: ' + E.Message);
   end;
-  frmStickyForm.FStopRequested := True;
 end;
 
 // =======================================================
