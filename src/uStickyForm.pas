@@ -375,6 +375,7 @@ begin
       Result := -1;
     end;
   end;
+  lbChannels.Repaint;
 end;
 
 
@@ -385,21 +386,24 @@ end;
 
 procedure TfrmStickyForm.UseDefaultLogo(const Channel: TChannelInfo);
 var
-  DefaultLogo: string;
+  idx, imgIndex: Integer;
+  noLogoPath: string;
 begin
-  // путь до дефолтного логотипа в папке logo-channels
-  DefaultLogo := TPath.Combine(frmSettings.lePachStyle.Text + 'logo-channels\', 'no-logo.png');
+  noLogoPath := frmSettings.lePachStyle.Text + 'logo-channels\NoLogo.png';
 
-  if FileExists(DefaultLogo) then
-  begin
-    TThread.Queue(nil,
-      procedure
-      begin
-        AddImageFromFileToImageList(DefaultLogo, Channel.TVGID);
-        lbChannels.Invalidate;
-      end);
-  end;
-  lbChannels.Update;
+  if not FileExists(noLogoPath) then
+    Exit; // fallback — ничего нет
+
+  imgIndex := AddImageFromFileToImageList(noLogoPath, 'NoLogo');
+
+  if imgIndex >= 0 then
+    FLogoMap.AddOrSetValue(Channel.TVGID, imgIndex);
+
+  idx := lbChannels.Items.IndexOf(Channel.Name);
+  if idx >= 0 then
+    lbChannels.Items.Objects[idx] := TObject(NativeInt(imgIndex));
+
+  lbChannels.Invalidate;
 end;
 
 
@@ -519,7 +523,7 @@ begin
                 if idx >= 0 then
                   lbChannels.Items.Objects[idx] := TObject(NativeInt(imgIndex));
 
-                lbChannels.Invalidate;
+                lbChannels.Repaint;
               end);
           end
           else
@@ -532,6 +536,7 @@ begin
         HttpClient.Free;
       end;
     end).Start;
+    lbChannels.Repaint;
 end;
 
 

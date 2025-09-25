@@ -158,6 +158,7 @@ object frmStickyForm: TfrmStickyForm
       PopupMenu = pmMenu
       OnDblClick = VLC_PlayerDblClick
       SnapShotFmt = 'png'
+      MouseEventsHandler = mehComponent
     end
   end
   object lbChannels: TListBox
