@@ -1,0 +1,99 @@
+Процедуры управления каналами
+
+1)PlayChannelByIndex(AIndex: Integer)
+
+sbPlayClick(Sender: TObject)
+
+sbNextClick(Sender: TObject)
+
+sbBackClick(Sender: TObject)
+
+lbChannelsDblClick(Sender: TObject)
+
+Процедуры работы с M3U и EPG
+
+ParseM3U(const FileName: string)
+
+LoadEPGUrlsFromM3ULine(const Line: string)
+
+DownloadAndParseAllEPG
+
+DownloadAndParseEPG(const AUrl: string)
+
+ParseEPGStream(const MS: TMemoryStream)
+
+ParseXMLTVDate(const S: string): TDateTime
+
+ClearCurrentPrograms
+
+RefreshCurrentPrograms
+
+EPGTimerHandler(Sender: TObject)
+
+StartEPGTimerHandler(Sender: TObject)
+
+EpgStatus
+
+ExtractCurrentProgram(const AText: string): string
+
+Процедуры работы с логотипами
+
+MakeLogoFileName(const Channel: TChannelInfo): string
+
+QueueDownloadLogo(const Channel: TChannelInfo)
+
+AddImageFromFileToImageList(const AFileName, AKey: string): Integer
+
+GetLogoIndexForLogoURL(const ALogoURL: string): Integer
+
+GetLogoIndexForTVGID(const ATVGID: string): Integer
+
+UseDefaultLogo(const Channel: TChannelInfo)
+
+ResetImageListToNoLogo
+
+ResizePNG(const InStream, OutStream: TStream; const NewWidth, NewHeight: Integer)
+
+Процедуры интерфейса
+
+FormCreate(Sender: TObject)
+
+FormDestroy(Sender: TObject)
+
+FormShow(Sender: TObject)
+
+FormPaint(Sender: TObject)
+
+FormCloseQuery(Sender: TObject; var CanClose: Boolean)
+
+C1Click(Sender: TObject) – показать/скрыть список каналов
+
+sbFullScreenClick(Sender: TObject)
+
+sbOpenClick(Sender: TObject) – открыть M3U
+
+tvVolumeChange(Sender: TObject)
+
+sbVolumeClick(Sender: TObject)
+
+tStatusTimer(Sender: TObject)
+
+lbChannelsDrawItem(Control: TWinControl; Index: Integer; Rect: TRect; State: TOwnerDrawState)
+
+Процедуры VLC Player
+
+OnPlaying(Sender: TObject)
+
+OnBuffering(Sender: TObject; cache: Single)
+
+OnError(Sender: TObject)
+
+VLC_PlayerDblClick(Sender: TObject)
+
+Прочие
+
+N1Click(Sender: TObject) – показать настройки
+
+WriteDebugLog(const Msg: string) – логирование
+
+LoadPNGToControl(const FileName: string; Control: TControl) – загрузка PNG в кнопку/контрол

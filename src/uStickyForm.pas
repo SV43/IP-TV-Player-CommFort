@@ -382,28 +382,38 @@ end;
 
 
 
-
-
 procedure TfrmStickyForm.UseDefaultLogo(const Channel: TChannelInfo);
 var
   idx, imgIndex: Integer;
   noLogoPath: string;
+  itemRect: TRect;
 begin
   noLogoPath := frmSettings.lePachStyle.Text + 'logo-channels\NoLogo.png';
 
   if not FileExists(noLogoPath) then
-    Exit; // fallback — ничего нет
+    Exit; // fallback — файла вообще нет
 
-  imgIndex := AddImageFromFileToImageList(noLogoPath, 'NoLogo');
+  // Для безопасности UI вызываем через Synchronize
+  TThread.Synchronize(nil,
+    procedure
+    begin
+      imgIndex := AddImageFromFileToImageList(noLogoPath, 'NoLogo');
 
-  if imgIndex >= 0 then
-    FLogoMap.AddOrSetValue(Channel.TVGID, imgIndex);
+      if imgIndex >= 0 then
+        FLogoMap.AddOrSetValue(Channel.TVGID, imgIndex);
 
-  idx := lbChannels.Items.IndexOf(Channel.Name);
-  if idx >= 0 then
-    lbChannels.Items.Objects[idx] := TObject(NativeInt(imgIndex));
+      idx := lbChannels.Items.IndexOf(Channel.Name);
+      if idx >= 0 then
+      begin
+        lbChannels.Items.Objects[idx] := TObject(NativeInt(imgIndex));
 
-  lbChannels.Invalidate;
+        // перерисовываем только нужную строку
+        itemRect := lbChannels.ItemRect(idx);
+        InvalidateRect(lbChannels.Handle, @itemRect, True);
+        UpdateWindow(lbChannels.Handle);
+      end;
+    end
+  );
 end;
 
 
@@ -450,13 +460,14 @@ begin
   FileName := Channel.TVGID + '.png';
   DestPath := TPath.Combine(LogoDir, FileName);
 
-  // если логотип уже есть
+  // если логотип уже есть на диске
   if FileExists(DestPath) then
   begin
     TThread.Synchronize(nil,
       procedure
       var
         idx, imgIndex: Integer;
+        itemRect: TRect;
       begin
         imgIndex := AddImageFromFileToImageList(DestPath, Channel.TVGID);
 
@@ -465,13 +476,19 @@ begin
 
         idx := lbChannels.Items.IndexOf(Channel.Name);
         if idx >= 0 then
+        begin
           lbChannels.Items.Objects[idx] := TObject(NativeInt(imgIndex));
 
-        lbChannels.Invalidate;
+          // перерисуем только одну строку
+          itemRect := lbChannels.ItemRect(idx);
+          InvalidateRect(lbChannels.Handle, @itemRect, True);
+          UpdateWindow(lbChannels.Handle);
+        end;
       end);
     Exit;
   end;
 
+  // если URL отсутствует → используем дефолтный
   if Channel.LogoURL = '' then
   begin
     UseDefaultLogo(Channel);
@@ -480,6 +497,7 @@ begin
 
   localGen := FGeneration;
 
+  // поток для скачивания логотипа
   TThread.CreateAnonymousThread(
     procedure
     var
@@ -507,10 +525,12 @@ begin
               Resized.Free;
             end;
 
+            // применяем картинку в UI
             TThread.Synchronize(nil,
               procedure
               var
                 idx, imgIndex: Integer;
+                itemRect: TRect;
               begin
                 if localGen <> FGeneration then Exit;
 
@@ -521,9 +541,14 @@ begin
 
                 idx := lbChannels.Items.IndexOf(Channel.Name);
                 if idx >= 0 then
+                begin
                   lbChannels.Items.Objects[idx] := TObject(NativeInt(imgIndex));
 
-                lbChannels.Repaint;
+                  // перерисуем только изменившуюся строку
+                  itemRect := lbChannels.ItemRect(idx);
+                  InvalidateRect(lbChannels.Handle, @itemRect, True);
+                  UpdateWindow(lbChannels.Handle);
+                end;
               end);
           end
           else
@@ -536,7 +561,6 @@ begin
         HttpClient.Free;
       end;
     end).Start;
-    lbChannels.Repaint;
 end;
 
 
@@ -549,7 +573,7 @@ end;
 procedure TfrmStickyForm.ParseM3U(const FileName: string);
 var
   SL: TStringList;
-  i, j: Integer;
+  i: Integer;
   Line, TVGID, LogoURL, Name, StreamURL: string;
   Info: TChannelInfo;
   m: TMatch;
@@ -565,25 +589,24 @@ begin
 
   lbChannels.Items.BeginUpdate;
   try
-    // сначала освобождаем старые объекты каналов
+    // очищаем старые каналы
     for i := 0 to FChannels.Count - 1 do
       FChannels[i].Free;
     FChannels.Clear;
-
     lbChannels.Clear;
 
     SL := TStringList.Create;
     try
       SL.LoadFromFile(FileName, TEncoding.UTF8);
 
-      // ищем заголовок #EXTM3U и парсим url-tvg если есть
-      for j := 0 to SL.Count - 1 do
+      // ищем заголовок #EXTM3U и парсим epg url
+      for i := 0 to SL.Count - 1 do
       begin
-        HeaderLine := Trim(SL[j]);
+        HeaderLine := Trim(SL[i]);
         if HeaderLine.StartsWith('#EXTM3U', True) then
         begin
           if frmSettings.cbJTV.Checked then
-            LoadEPGUrlsFromM3ULine(HeaderLine);  // только если галка
+            LoadEPGUrlsFromM3ULine(HeaderLine);
           Break;
         end;
       end;
@@ -595,7 +618,6 @@ begin
 
         if Line.StartsWith('#EXTINF', True) then
         begin
-          // парсим атрибуты
           m := TRegEx.Match(Line, 'tvg-id\s*=\s*"(.*?)"', [roIgnoreCase]);
           if m.Success then TVGID := m.Groups[1].Value else TVGID := '';
 
@@ -608,30 +630,25 @@ begin
             Name := '';
 
           StreamURL := '';
-          if (i + 1 < SL.Count) then
+          if (i + 1 < SL.Count) and not SL[i + 1].StartsWith('#') then
           begin
-            if not SL[i + 1].StartsWith('#') then
-            begin
-              StreamURL := Trim(SL[i + 1]);
-              Inc(i); // пропускаем строку с URL
-            end;
+            StreamURL := Trim(SL[i + 1]);
+            Inc(i);
           end;
 
-          // создаём объект канала
           Info := TChannelInfo.Create;
           Info.Name := Name;
           Info.TVGID := TVGID;
           Info.LogoURL := LogoURL;
           Info.StreamURL := StreamURL;
-
           Info.CurrentTitle := '';
           Info.CurrentStart := 0;
           Info.CurrentStop := 0;
 
-          // добавляем в список и в ListBox
           FChannels.Add(Info);
           lbChannels.Items.Add(Info.Name);
 
+          // логотип загружается асинхронно и перерисовывает только нужный элемент
           QueueDownloadLogo(Info);
         end;
 
@@ -642,19 +659,16 @@ begin
     end;
   finally
     lbChannels.Items.EndUpdate;
-    lbChannels.Invalidate;
+    // **не вызываем Invalidate на весь список**
   end;
 
   // управление таймером EPG
   if Assigned(FEPGTimer) then
-  begin
-    if frmSettings.cbJTV.Checked then
-      FEPGTimer.Enabled := True   // включаем обновление EPG
-    else
-      FEPGTimer.Enabled := False; // отключаем полностью
-  end;
-  lbChannels.Update;
+    FEPGTimer.Enabled := frmSettings.cbJTV.Checked;
+
+  // **не вызываем lbChannels.Update**, отдельные элементы обновятся через QueueDownloadLogo/UseDefaultLogo
 end;
+
 
 
 function TfrmStickyForm.GetLogoIndexForLogoURL(const ALogoURL: string): Integer;
@@ -1596,6 +1610,7 @@ begin
   end;
 
   lbStatus.Caption := stateName;
+
 end;
 
 procedure TfrmStickyForm.sbFullScreenClick(Sender: TObject);
