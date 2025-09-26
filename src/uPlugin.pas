@@ -184,14 +184,13 @@ begin
     if not DirectoryExists(path + 'IPTV_Plugin\') then
       MkDir(path + 'IPTV_Plugin\');
 
-    frmSettings := TfrmSettings.Create(Application);
+    frmSettings := TfrmSettings.Create(nil);
     frmStickyForm := TfrmStickyForm.Create(nil);
 
+    StickyChanName := frmSettings.cbIPTVchan.Text;
     Open;
     ReEnter;
-    StickyChanName := frmSettings.cbIPTVchan.Text;
 
-    ForceDirectories(frmSettings.lePachStyle.Text + '\logo-channels\');
 
     SetTimer(0, 1, TIMER_INTERVAL, @Refrash_Form);
 

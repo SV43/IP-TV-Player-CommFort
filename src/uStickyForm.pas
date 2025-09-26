@@ -856,8 +856,6 @@ begin
   VLC_Player.StartOptions.Add(':rtsp-caching=1000');
   VLC_Player.StartOptions.Add(':verbose=2');  }
 
-
-
   if (FChannels.Count = 0) and FileExists(frmSettings.edURLM3U.Text) then
      ParseM3U(frmSettings.edURLM3U.Text);
 end;

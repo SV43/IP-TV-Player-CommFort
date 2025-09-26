@@ -3,8 +3,8 @@ object frmSettings: TfrmSettings
   Top = 0
   BorderIcons = [biSystemMenu]
   Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
-  ClientHeight = 330
-  ClientWidth = 394
+  ClientHeight = 374
+  ClientWidth = 388
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -16,12 +16,13 @@ object frmSettings: TfrmSettings
   object pcSettings: TPageControl
     Left = 0
     Top = 0
-    Width = 394
-    Height = 289
+    Width = 388
+    Height = 333
     ActivePage = tsSettings
     Align = alClient
     TabOrder = 0
-    ExplicitHeight = 283
+    ExplicitWidth = 394
+    ExplicitHeight = 289
     object tsSettings: TTabSheet
       Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
       object lbCCaptionChanel: TLabel
@@ -44,10 +45,26 @@ object frmSettings: TfrmSettings
         Font.Style = []
         ParentFont = False
       end
+      object sbPathVLC: TSpeedButton
+        Left = 330
+        Top = 32
+        Width = 23
+        Height = 22
+        Caption = '...'
+        OnClick = sbPathVLCClick
+      end
+      object sbPathTheme: TSpeedButton
+        Left = 330
+        Top = 77
+        Width = 23
+        Height = 22
+        Caption = '...'
+        OnClick = sbPathThemeClick
+      end
       object dePachVLC: TLabeledEdit
         Left = 24
         Top = 32
-        Width = 329
+        Width = 305
         Height = 21
         EditLabel.Width = 66
         EditLabel.Height = 13
@@ -76,7 +93,7 @@ object frmSettings: TfrmSettings
       object lePachStyle: TLabeledEdit
         Left = 24
         Top = 77
-        Width = 329
+        Width = 305
         Height = 21
         EditLabel.Width = 133
         EditLabel.Height = 13
@@ -93,6 +110,17 @@ object frmSettings: TfrmSettings
         Checked = True
         State = cbChecked
         TabOrder = 4
+      end
+      object leDebygLogPath: TLabeledEdit
+        Left = 24
+        Top = 264
+        Width = 327
+        Height = 21
+        EditLabel.Width = 77
+        EditLabel.Height = 13
+        EditLabel.Caption = #1055#1091#1090#1100' '#1076#1086' '#1083#1086#1075#1086#1074':'
+        TabOrder = 5
+        Text = ''
       end
     end
     object tsAbout: TTabSheet
@@ -216,7 +244,7 @@ object frmSettings: TfrmSettings
       end
       object lbYer: TLabel
         Left = 136
-        Top = 224
+        Top = 264
         Width = 105
         Height = 16
         Caption = '2015 - 2025 '#1075#1086#1076
@@ -271,12 +299,13 @@ object frmSettings: TfrmSettings
   end
   object pnButton: TPanel
     Left = 0
-    Top = 289
-    Width = 394
+    Top = 333
+    Width = 388
     Height = 41
     Align = alBottom
     TabOrder = 1
-    ExplicitTop = 283
+    ExplicitTop = 289
+    ExplicitWidth = 394
     object btSave: TButton
       Left = 128
       Top = 8
