@@ -61,6 +61,7 @@ type
     tvVolume: TImageTrackBar;
     VLC_Player: TPasLibVlcPlayer;
     lbEPG_Text: TLabel;
+    pVLC_Player: TPanel;
     procedure C1Click(Sender: TObject);
     procedure sbOpenClick(Sender: TObject);
     procedure sbNextClick(Sender: TObject);
@@ -883,7 +884,7 @@ begin
 
   // cleanup timers if any
   FreeAndNil(FEPGTimer);
-  FreeAndNil(FEPGStartTimer);
+
 end;
 
 procedure TfrmStickyForm.FormPaint(Sender: TObject);

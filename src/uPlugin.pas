@@ -218,7 +218,6 @@ begin
     if Assigned(frmStickyForm) then
     begin
       frmStickyForm.FStopRequested := True;
-      frmStickyForm.VLC_Player.Stop;
       ChatPanelSize := GetChatPanelSize();
       if frmStickyForm.ParentChanHandle <> 0 then
         MoveWindow(frmStickyForm.ParentChanHandle, 0, 0, ChatPanelSize.cx, ChatPanelSize.cy, True);
@@ -272,7 +271,7 @@ begin
   end
   else if (dwID = 2810) then
   begin
-    uName := 'IPTV Plugin';
+    uName := 'IPTV Plugin 2.0 Final';
     iSize := Length(uName) * 2 + 4;
     if (dwOutBufferSize = 0) then
       Result := iSize

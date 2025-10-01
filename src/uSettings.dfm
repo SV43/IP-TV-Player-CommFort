@@ -21,8 +21,6 @@ object frmSettings: TfrmSettings
     ActivePage = tsSettings
     Align = alClient
     TabOrder = 0
-    ExplicitWidth = 394
-    ExplicitHeight = 289
     object tsSettings: TTabSheet
       Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
       object lbCCaptionChanel: TLabel
@@ -304,8 +302,6 @@ object frmSettings: TfrmSettings
     Height = 41
     Align = alBottom
     TabOrder = 1
-    ExplicitTop = 289
-    ExplicitWidth = 394
     object btSave: TButton
       Left = 128
       Top = 8

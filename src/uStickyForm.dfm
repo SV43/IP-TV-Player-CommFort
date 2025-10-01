@@ -103,7 +103,7 @@ object frmStickyForm: TfrmStickyForm
       Font.Style = [fsBold]
       ParentFont = False
       Layout = tlCenter
-      ExplicitHeight = 16
+      ExplicitHeight = 15
     end
     object sbVolume: TSpeedButton
       AlignWithMargins = True
@@ -130,7 +130,7 @@ object frmStickyForm: TfrmStickyForm
       Font.Style = [fsBold]
       ParentFont = False
       Layout = tlCenter
-      ExplicitHeight = 16
+      ExplicitHeight = 15
     end
     object tvVolume: TImageTrackBar
       Left = 805
@@ -149,17 +149,6 @@ object frmStickyForm: TfrmStickyForm
     Height = 455
     Align = alClient
     TabOrder = 1
-    object VLC_Player: TPasLibVlcPlayer
-      Left = 1
-      Top = 1
-      Width = 773
-      Height = 453
-      Align = alClient
-      PopupMenu = pmMenu
-      OnDblClick = VLC_PlayerDblClick
-      SnapShotFmt = 'png'
-      MouseEventsHandler = mehComponent
-    end
   end
   object lbChannels: TListBox
     Left = 778
@@ -179,6 +168,29 @@ object frmStickyForm: TfrmStickyForm
     TabOrder = 2
     OnDblClick = lbChannelsDblClick
     OnDrawItem = lbChannelsDrawItem
+  end
+  object pVLC_Player: TPanel
+    Left = 0
+    Top = 0
+    Width = 775
+    Height = 455
+    Align = alClient
+    TabOrder = 3
+    ExplicitLeft = 616
+    ExplicitTop = 224
+    ExplicitWidth = 185
+    ExplicitHeight = 41
+    object VLC_Player: TPasLibVlcPlayer
+      Left = 1
+      Top = 1
+      Width = 773
+      Height = 453
+      Align = alClient
+      PopupMenu = pmMenu
+      OnDblClick = VLC_PlayerDblClick
+      SnapShotFmt = 'png'
+      MouseEventsHandler = mehComponent
+    end
   end
   object pmMenu: TPopupMenu
     Left = 248
