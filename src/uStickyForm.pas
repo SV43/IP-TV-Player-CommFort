@@ -61,7 +61,6 @@ type
     tvVolume: TImageTrackBar;
     VLC_Player: TPasLibVlcPlayer;
     lbEPG_Text: TLabel;
-    pVLC_Player: TPanel;
     procedure C1Click(Sender: TObject);
     procedure sbOpenClick(Sender: TObject);
     procedure sbNextClick(Sender: TObject);
@@ -857,6 +856,8 @@ begin
   VLC_Player.StartOptions.Add(':rtsp-caching=1000');
   VLC_Player.StartOptions.Add(':verbose=2');  }
 
+
+
   if (FChannels.Count = 0) and FileExists(frmSettings.edURLM3U.Text) then
      ParseM3U(frmSettings.edURLM3U.Text);
 end;
@@ -884,7 +885,7 @@ begin
 
   // cleanup timers if any
   FreeAndNil(FEPGTimer);
-
+  FreeAndNil(FEPGStartTimer);
 end;
 
 procedure TfrmStickyForm.FormPaint(Sender: TObject);
@@ -1735,4 +1736,3 @@ end;
 initialization
 
 end.
-

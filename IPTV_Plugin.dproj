@@ -80,7 +80,7 @@
     <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
         <OutputExt>cfplug</OutputExt>
         <Debugger_HostApplication>C:\Program Files (x86)\CommFort\CommFort.exe</Debugger_HostApplication>
-        <DCC_UnitSearchPath>C:\Delphi\Source\2025\IP-TV-Player-CommFort\dcu;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>C:\Delphi\Source\2025\IP-TV-Player-CommFort\dcu;C:\Delphi\Source\2025\IP-TV Player\dcu;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_ExeOutput>C:\Program Files (x86)\CommFort\Plugins\</DCC_ExeOutput>
         <Manifest_File>None</Manifest_File>
         <AppDPIAwarenessMode>none</AppDPIAwarenessMode>

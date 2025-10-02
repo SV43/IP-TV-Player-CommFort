@@ -176,10 +176,6 @@ object frmStickyForm: TfrmStickyForm
     Height = 455
     Align = alClient
     TabOrder = 3
-    ExplicitLeft = 616
-    ExplicitTop = 224
-    ExplicitWidth = 185
-    ExplicitHeight = 41
     object VLC_Player: TPasLibVlcPlayer
       Left = 1
       Top = 1
