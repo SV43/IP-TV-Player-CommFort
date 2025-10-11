@@ -846,15 +846,15 @@ begin
   IsFullScreen := False;
 
 
-{  // Устанавливаем минимальные значения буферов (100 мс)
-  VLC_Player.StartOptions.Add(':network-caching=1000');
-  VLC_Player.StartOptions.Add(':live-caching=1000');
-  VLC_Player.StartOptions.Add(':file-caching=1000');
-  VLC_Player.StartOptions.Add(':disc-caching=1000');
-  VLC_Player.StartOptions.Add(':tcp-caching=1000');
-  VLC_Player.StartOptions.Add(':udp-caching=1000');
-  VLC_Player.StartOptions.Add(':rtsp-caching=1000');
-  VLC_Player.StartOptions.Add(':verbose=2');  }
+  // Устанавливаем минимальные значения буферов (100 мс)
+  VLC_Player.StartOptions.Add('--network-caching=3000');
+  VLC_Player.StartOptions.Add('--live-caching=3000');
+  VLC_Player.StartOptions.Add('--file-caching=3000');
+  VLC_Player.StartOptions.Add('--disc-caching=3000');
+  VLC_Player.StartOptions.Add('--tcp-caching=3000');
+  VLC_Player.StartOptions.Add('--udp-caching=3000');
+  VLC_Player.StartOptions.Add('--lua-intf=playlist --lua-plugins-path=C:\Program Files (x86)\CommFort\Plugins\VLC\plugins\lua\playlist\');
+  VLC_Player.StartOptions.Add('--verbose=2');
 
 
 

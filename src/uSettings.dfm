@@ -3,7 +3,7 @@ object frmSettings: TfrmSettings
   Top = 0
   BorderIcons = [biSystemMenu]
   Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
-  ClientHeight = 374
+  ClientHeight = 408
   ClientWidth = 388
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -17,12 +17,12 @@ object frmSettings: TfrmSettings
     Left = 0
     Top = 0
     Width = 388
-    Height = 333
-    ActivePage = tsSettings
+    Height = 367
+    ActivePage = tsAbout
     Align = alClient
     TabOrder = 0
     object tsSettings: TTabSheet
-      Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
+      Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080' '#1087#1083#1072#1075#1080#1085#1072
       object lbCCaptionChanel: TLabel
         Left = 24
         Top = 104
@@ -114,11 +114,50 @@ object frmSettings: TfrmSettings
         Top = 264
         Width = 327
         Height = 21
-        EditLabel.Width = 77
+        EditLabel.Width = 121
         EditLabel.Height = 13
-        EditLabel.Caption = #1055#1091#1090#1100' '#1076#1086' '#1083#1086#1075#1086#1074':'
+        EditLabel.Caption = #1055#1091#1090#1100' '#1076#1086' '#1083#1086#1075#1086#1074' '#1087#1083#1072#1075#1080#1085#1072':'
         TabOrder = 5
         Text = ''
+      end
+    end
+    object TabSheet1: TTabSheet
+      Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080' VLC'
+      ImageIndex = 2
+      object lVLC: TLabel
+        Left = 24
+        Top = 8
+        Width = 125
+        Height = 13
+        Caption = #1055#1072#1088#1072#1084#1077#1090#1088#1099' '#1079#1072#1087#1091#1089#1082#1072' VLC:'
+      end
+      object leLogVLCDLL: TLabeledEdit
+        Left = 24
+        Top = 304
+        Width = 327
+        Height = 21
+        EditLabel.Width = 98
+        EditLabel.Height = 13
+        EditLabel.Caption = #1055#1091#1090#1100' '#1076#1086' '#1083#1086#1075#1086#1074' VLC:'
+        TabOrder = 0
+        Text = ''
+      end
+      object mParamVLC: TMemo
+        Left = 24
+        Top = 27
+        Width = 327
+        Height = 254
+        Lines.Strings = (
+          '--network-caching=3000'
+          '--live-caching=3000'
+          '--file-caching=3000'
+          '--disc-caching=3000'
+          '--tcp-caching=3000'
+          '--udp-caching=3000'
+          '--lua-intf=playlist --lua-plugins-path=C:\Program Files '
+          '(x86)\CommFort\Plugins\VLC\plugins\lua\playlist\'
+          '--verbose=2')
+        TabOrder = 1
       end
     end
     object tsAbout: TTabSheet
@@ -217,9 +256,9 @@ object frmSettings: TfrmSettings
       object lbNamePlug: TLabel
         Left = 111
         Top = 40
-        Width = 179
+        Width = 194
         Height = 18
-        Caption = 'IPTV-Plugin Version 2.0'
+        Caption = 'IPTV-Plugin Version 2.0.3'
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clWindowText
         Font.Height = -15
@@ -242,7 +281,7 @@ object frmSettings: TfrmSettings
       end
       object lbYer: TLabel
         Left = 136
-        Top = 264
+        Top = 304
         Width = 105
         Height = 16
         Caption = '2015 - 2025 '#1075#1086#1076
@@ -253,8 +292,39 @@ object frmSettings: TfrmSettings
         Font.Style = [fsBold]
         ParentFont = False
       end
+      object Label2: TLabel
+        Left = 54
+        Top = 224
+        Width = 276
+        Height = 16
+        Caption = #1048#1089#1087#1086#1083#1100#1079#1091#1102#1090#1089#1103' '#1073#1080#1073#1083#1080#1086#1090#1077#1082#1080' VLC 3.0.20 x86'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -13
+        Font.Name = 'Tahoma'
+        Font.Style = [fsBold]
+        ParentFont = False
+      end
+      object Label3: TLabel
+        Left = 54
+        Top = 238
+        Width = 266
+        Height = 39
+        Caption = 
+          '* '#1056#1077#1082#1086#1084#1077#1085#1076#1091#1077#1090#1089#1103' '#1080#1089#1087#1086#1083#1100#1079#1086#1074#1072#1090#1100' '#1090#1086#1083#1100#1082#1086' '#1101#1090#1086#1081' '#1074#1077#1088#1089#1080#1080' '#13#10'              ' +
+          #1073#1080#1073#1083#1080#1086#1090#1077#1082#1080', '#1080#1085#1072#1095#1077' '#1085#1077' '#1075#1072#1088#1072#1085#1090#1080#1088#1086#1074#1072#1085#1072' '#13#10'              '#1089#1090#1072#1073#1080#1083#1100#1085#1072#1103' '#1088#1072 +
+          #1073#1086#1090#1072' '#1089' IP-TV '#1087#1086#1090#1086#1082#1072#1084#1080'!'
+        Color = clRed
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clRed
+        Font.Height = -11
+        Font.Name = 'Tahoma'
+        Font.Style = []
+        ParentColor = False
+        ParentFont = False
+      end
       object llEmail: TLinkLabel
-        Left = 71
+        Left = 101
         Top = 112
         Width = 215
         Height = 20
@@ -297,7 +367,7 @@ object frmSettings: TfrmSettings
   end
   object pnButton: TPanel
     Left = 0
-    Top = 333
+    Top = 367
     Width = 388
     Height = 41
     Align = alBottom
