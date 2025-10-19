@@ -3,7 +3,7 @@ object frmSettings: TfrmSettings
   Top = 0
   BorderIcons = [biSystemMenu]
   Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
-  ClientHeight = 408
+  ClientHeight = 369
   ClientWidth = 388
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -17,8 +17,8 @@ object frmSettings: TfrmSettings
     Left = 0
     Top = 0
     Width = 388
-    Height = 367
-    ActivePage = tsAbout
+    Height = 328
+    ActivePage = tsSettings
     Align = alClient
     TabOrder = 0
     object tsSettings: TTabSheet
@@ -121,51 +121,12 @@ object frmSettings: TfrmSettings
         Text = ''
       end
     end
-    object TabSheet1: TTabSheet
-      Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080' VLC'
-      ImageIndex = 2
-      object lVLC: TLabel
-        Left = 24
-        Top = 8
-        Width = 125
-        Height = 13
-        Caption = #1055#1072#1088#1072#1084#1077#1090#1088#1099' '#1079#1072#1087#1091#1089#1082#1072' VLC:'
-      end
-      object leLogVLCDLL: TLabeledEdit
-        Left = 24
-        Top = 304
-        Width = 327
-        Height = 21
-        EditLabel.Width = 98
-        EditLabel.Height = 13
-        EditLabel.Caption = #1055#1091#1090#1100' '#1076#1086' '#1083#1086#1075#1086#1074' VLC:'
-        TabOrder = 0
-        Text = ''
-      end
-      object mParamVLC: TMemo
-        Left = 24
-        Top = 27
-        Width = 327
-        Height = 254
-        Lines.Strings = (
-          '--network-caching=3000'
-          '--live-caching=3000'
-          '--file-caching=3000'
-          '--disc-caching=3000'
-          '--tcp-caching=3000'
-          '--udp-caching=3000'
-          '--lua-intf=playlist --lua-plugins-path=C:\Program Files '
-          '(x86)\CommFort\Plugins\VLC\plugins\lua\playlist\'
-          '--verbose=2')
-        TabOrder = 1
-      end
-    end
     object tsAbout: TTabSheet
       Caption = #1054' '#1087#1083#1072#1075#1080#1085#1077
       ImageIndex = 1
       object iVLC: TImage
         Left = 16
-        Top = 40
+        Top = 16
         Width = 49
         Height = 49
         Picture.Data = {
@@ -254,11 +215,11 @@ object frmSettings: TfrmSettings
           5DCEE8FF02605779651C8CE8740000000049454E44AE426082}
       end
       object lbNamePlug: TLabel
-        Left = 111
-        Top = 40
-        Width = 194
+        Left = 87
+        Top = 16
+        Width = 235
         Height = 18
-        Caption = 'IPTV-Plugin Version 2.0.3'
+        Caption = 'IPTV-Plugin Version 2.1.0 Final'
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clWindowText
         Font.Height = -15
@@ -268,7 +229,7 @@ object frmSettings: TfrmSettings
       end
       object lbAutor: TLabel
         Left = 87
-        Top = 76
+        Top = 52
         Width = 243
         Height = 13
         Caption = #1040#1074#1090#1086#1088' '#1060#1086#1092#1072#1085#1086#1074' '#1044#1077#1085#1080#1089' '#1042#1080#1082#1090#1086#1088#1086#1074#1080#1095' aka SV'
@@ -280,8 +241,8 @@ object frmSettings: TfrmSettings
         ParentFont = False
       end
       object lbYer: TLabel
-        Left = 136
-        Top = 304
+        Left = 132
+        Top = 267
         Width = 105
         Height = 16
         Caption = '2015 - 2025 '#1075#1086#1076
@@ -294,7 +255,7 @@ object frmSettings: TfrmSettings
       end
       object Label2: TLabel
         Left = 54
-        Top = 224
+        Top = 200
         Width = 276
         Height = 16
         Caption = #1048#1089#1087#1086#1083#1100#1079#1091#1102#1090#1089#1103' '#1073#1080#1073#1083#1080#1086#1090#1077#1082#1080' VLC 3.0.20 x86'
@@ -307,7 +268,7 @@ object frmSettings: TfrmSettings
       end
       object Label3: TLabel
         Left = 54
-        Top = 238
+        Top = 214
         Width = 266
         Height = 39
         Caption = 
@@ -325,7 +286,7 @@ object frmSettings: TfrmSettings
       end
       object llEmail: TLinkLabel
         Left = 101
-        Top = 112
+        Top = 88
         Width = 215
         Height = 20
         Caption = 
@@ -341,7 +302,7 @@ object frmSettings: TfrmSettings
       end
       object llGitHubSource: TLinkLabel
         Left = 16
-        Top = 154
+        Top = 130
         Width = 361
         Height = 20
         Caption = 
@@ -357,7 +318,7 @@ object frmSettings: TfrmSettings
       end
       object edGitHub: TEdit
         Left = 71
-        Top = 180
+        Top = 156
         Width = 245
         Height = 21
         TabOrder = 2
@@ -367,7 +328,7 @@ object frmSettings: TfrmSettings
   end
   object pnButton: TPanel
     Left = 0
-    Top = 367
+    Top = 328
     Width = 388
     Height = 41
     Align = alBottom

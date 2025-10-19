@@ -32,12 +32,8 @@ type
     sbPathVLC: TSpeedButton;
     sbPathTheme: TSpeedButton;
     leDebygLogPath: TLabeledEdit;
-    leLogVLCDLL: TLabeledEdit;
     Label2: TLabel;
     Label3: TLabel;
-    TabSheet1: TTabSheet;
-    lVLC: TLabel;
-    mParamVLC: TMemo;
     procedure FormShow(Sender: TObject);
     procedure btSaveClick(Sender: TObject);
     procedure sbPathVLCClick(Sender: TObject);

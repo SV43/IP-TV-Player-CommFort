@@ -86,6 +86,7 @@ end;
 function Save:string;
 var
   Ini: TIniFile;
+  i: Integer;
 begin
   DebugMsg('Save settings');
   Ini := TIniFile.Create(path+'IPTV_Plugin\IPTV_Plug.ini');
@@ -95,6 +96,7 @@ begin
     Ini.WriteString('Settings','Chann IPTV Plug', frmSettings.cbIPTVchan.Text);
     Ini.WriteString('Settings','URL M3U', frmSettings.edURLM3U.Text);
     ini.WriteBool('Settings', 'LoadEPG', frmSettings.cbJTV.Checked);
+    Ini.EraseSection('VideoLan'); // очистим старые данные
   finally
     Ini.Free;
   end;
@@ -103,6 +105,8 @@ end;
 function Open:string;
 var
   Ini: TIniFile;
+  i, Count: Integer;
+  Line: string;
 begin
   DebugMsg('Open settings');
   Ini := TIniFile.Create(path+'IPTV_Plugin\IPTV_Plug.ini');
@@ -271,7 +275,7 @@ begin
   end
   else if (dwID = 2810) then
   begin
-    uName := 'IPTV Plugin 2.0 Final';
+    uName := 'IPTV Plugin 2.0.3 Final';
     iSize := Length(uName) * 2 + 4;
     if (dwOutBufferSize = 0) then
       Result := iSize
@@ -474,7 +478,7 @@ begin
     ChanName := fReadText(bInBuffer, iReadOffset);
     if ChanName = StickyChanName then
     begin
-      frmStickyForm.VLC_Player.Stop;
+//      frmStickyForm.VLC_Player.Stop;
       FreeAndNil(frmStickyForm);
     end;
   end;

@@ -1,4 +1,4 @@
-library IPTV_Plugin;
+﻿library IPTV_Plugin;
 
 uses
   FullScreenFormUnit in 'src\FullScreenFormUnit.pas' {FullScreenForm},
@@ -12,7 +12,7 @@ uses
   sdStreams in 'dcu\sdStreams.pas',
   sdDebug in 'dcu\sdDebug.pas',
   sdStringTable in 'dcu\sdStringTable.pas',
-  PasLibVlcUnit in 'dcu\PasLibVlcUnit.pas';
+  Vlccomponent in 'dcu\Vlccomponent.pas';
 
 //{$LIBVERSION 'cfplug'}
 
