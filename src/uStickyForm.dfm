@@ -16,6 +16,7 @@ object frmStickyForm: TfrmStickyForm
   OnCloseQuery = FormCloseQuery
   OnCreate = FormCreate
   OnDestroy = FormDestroy
+  OnPaint = FormPaint
   OnShow = FormShow
   TextHeight = 13
   object Splitter: TSplitter
@@ -98,22 +99,6 @@ object frmStickyForm: TfrmStickyForm
       OnClick = sbVolumeClick
       ExplicitLeft = 1010
     end
-    object lbEPG_Text: TLabel
-      AlignWithMargins = True
-      Left = 208
-      Top = 4
-      Width = 4
-      Height = 45
-      Align = alLeft
-      Font.Charset = ANSI_CHARSET
-      Font.Color = clWindowText
-      Font.Height = -12
-      Font.Name = '@Arial Unicode MS'
-      Font.Style = [fsBold]
-      ParentFont = False
-      Layout = tlCenter
-      ExplicitHeight = 15
-    end
     object tvVolume: TImageTrackBar
       Left = 676
       Top = 1
@@ -183,6 +168,7 @@ object frmStickyForm: TfrmStickyForm
     end
     object N1231: TMenuItem
       Caption = '123'
+      OnClick = N1231Click
     end
   end
   object ilLogos: TImageList
@@ -194,5 +180,12 @@ object frmStickyForm: TfrmStickyForm
   object odFile: TOpenDialog
     Left = 329
     Top = 217
+  end
+  object PlayerStatus: TTimer
+    Enabled = False
+    Interval = 100
+    OnTimer = PlayerStatusTimer
+    Left = 520
+    Top = 280
   end
 end

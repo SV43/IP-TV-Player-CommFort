@@ -4,9 +4,15 @@ interface
 
 uses
   Windows, Messages, SysUtils, Classes, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Dialogs,
-  TypInfo, Vcl.Graphics, Vcl.Controls;
+  TypInfo, Vcl.Graphics, Vcl.Controls, Vcl.Imaging.pngimage, Math;
 
 type
+  // Объявления типов VLC
+  Plibvlc_instance_t = Pointer;
+  Plibvlc_media_t = Pointer;
+  Plibvlc_media_player_t = Pointer;
+  Plibvlc_event_manager_t = Pointer;
+
   // Состояния плеера
   TVlcState = (vlcIdle, vlcLoading, vlcPlaying, vlcPaused, vlcStopped, vlcError);
 
@@ -27,6 +33,7 @@ type
     FVolume: Integer;              // Громкость (0-100)
     FAutoPlay: Boolean;            // Автоматическое воспроизведение
     FVideoHandle: HWND;            // Хэндл окна для вывода видео
+    FOriginalParent: TWinControl;  // Исходный родительский контрол
     FUserAgent: string;            // User-Agent для HTTP-запросов
     FReferer: string;              // Referer для HTTP-запросов
     FHttpHeaders: TStringList;     // Дополнительные HTTP-заголовки
@@ -40,43 +47,54 @@ type
     FMuted: Boolean;               // Флаг состояния звука (включен/выключен)
 
     // Элементы управления на плеере
-    FLoadingStatusLabel: TLabel;   // Label для статуса загрузки в левом нижнем углу
+    FStatusLabel: TLabel;          // Label для статуса в левом нижнем углу
+    FStatusWindow: HWND;           // Окно для статуса поверх VLC
 
     // Переменные для рисования картинки
     FLogoBitmap: TBitmap;          // Битовой образ картинки
     FLogoVisible: Boolean;         // Видимость картинки
     FLogoFileName: string;         // Имя файла картинки
-    FLogoPosition: TRect;          // Позиция и размер картинки
     FLogoPaintTimer: TTimer;       // Таймер для перерисовки картинки
+    FLogoWindow: HWND;             // Окно для картинки поверх VLC
 
     // Указатели на объекты VLC
-    FInstance: Pointer;      // Экземпляр VLC
-    FMedia: Pointer;         // Медиа-объект
-    FPlayer: Pointer;        // Плеер
-    FEventManager: Pointer;  // Менеджер событий
+    FInstance: Plibvlc_instance_t;      // Экземпляр VLC
+    FMedia: Plibvlc_media_t;         // Медиа-объект
+    FPlayer: Plibvlc_media_player_t;        // Плеер
+    FEventManager: Plibvlc_event_manager_t;  // Менеджер событий
 
     // Объявления функций библиотеки VLC
-    T_libvlc_new: function(argc: Integer; argv: PPAnsiChar): Pointer; cdecl;
-    T_libvlc_release: procedure(p_instance: Pointer); cdecl;
-    T_libvlc_media_new_path: function(p_instance: Pointer; path: PAnsiChar): Pointer; cdecl;
-    T_libvlc_media_new_location: function(p_instance: Pointer; psz_mrl: PAnsiChar): Pointer; cdecl;
-    T_libvlc_media_release: procedure(p_media: Pointer); cdecl;
-    T_libvlc_media_player_new_from_media: function(p_media: Pointer): Pointer; cdecl;
-    T_libvlc_media_player_release: procedure(p_player: Pointer); cdecl;
-    T_libvlc_media_player_play: function(p_player: Pointer): Integer; cdecl;
-    T_libvlc_media_player_pause: procedure(p_player: Pointer); cdecl;
-    T_libvlc_media_player_stop: procedure(p_player: Pointer); cdecl;
-    T_libvlc_media_player_set_hwnd: procedure(p_player: Pointer; hwnd: Pointer); cdecl;
-    T_libvlc_audio_set_volume: procedure(p_player: Pointer; volume: Integer); cdecl;
-    T_libvlc_media_add_option: procedure(p_media: Pointer; psz_options: PAnsiChar); cdecl;
-    T_libvlc_media_player_get_length: function(p_player: Pointer): Int64; cdecl;
-    T_libvlc_media_player_get_time: function(p_player: Pointer): Int64; cdecl;
-    T_libvlc_media_player_get_position: function(p_player: Pointer): Single; cdecl;
-    T_libvlc_event_attach: procedure(p_event_manager: Pointer; event_type: Integer; callback: Pointer; user_data: Pointer); cdecl;
-    T_libvlc_media_player_event_manager: function(p_player: Pointer): Pointer; cdecl;
-    T_libvlc_audio_set_mute: procedure(p_player: Pointer; status: Integer); cdecl;
-    T_libvlc_audio_get_mute: function(p_player: Pointer): Integer; cdecl;
-    T_libvlc_media_player_is_playing: function(p_player: Pointer): Integer; cdecl;
+    T_libvlc_new: function(argc: Integer; argv: PPAnsiChar): Plibvlc_instance_t; cdecl;
+    T_libvlc_release: procedure(p_instance: Plibvlc_instance_t); cdecl;
+    T_libvlc_media_new_path: function(p_instance: Plibvlc_instance_t; path: PAnsiChar): Plibvlc_media_t; cdecl;
+    T_libvlc_media_new_location: function(p_instance: Plibvlc_instance_t; psz_mrl: PAnsiChar): Plibvlc_media_t; cdecl;
+    T_libvlc_media_release: procedure(p_media: Plibvlc_media_t); cdecl;
+    T_libvlc_media_player_new_from_media: function(p_media: Plibvlc_media_t): Plibvlc_media_player_t; cdecl;
+    T_libvlc_media_player_release: procedure(p_player: Plibvlc_media_player_t); cdecl;
+    T_libvlc_media_player_play: function(p_player: Plibvlc_media_player_t): Integer; cdecl;
+    T_libvlc_media_player_pause: procedure(p_player: Plibvlc_media_player_t); cdecl;
+    T_libvlc_media_player_stop: procedure(p_player: Plibvlc_media_player_t); cdecl;
+    T_libvlc_media_player_set_hwnd: procedure(p_player: Plibvlc_media_player_t; hwnd: Pointer); cdecl;
+    T_libvlc_audio_set_volume: procedure(p_player: Plibvlc_media_player_t; volume: Integer); cdecl;
+    T_libvlc_media_add_option: procedure(p_media: Plibvlc_media_t; psz_options: PAnsiChar); cdecl;
+    T_libvlc_media_player_get_length: function(p_player: Plibvlc_media_player_t): Int64; cdecl;
+    T_libvlc_media_player_get_time: function(p_player: Plibvlc_media_player_t): Int64; cdecl;
+    T_libvlc_media_player_get_position: function(p_player: Plibvlc_media_player_t): Single; cdecl;
+    T_libvlc_event_attach: procedure(p_event_manager: Plibvlc_event_manager_t; event_type: Integer; callback: Pointer; user_data: Pointer); cdecl;
+    T_libvlc_media_player_event_manager: function(p_player: Plibvlc_media_player_t): Plibvlc_event_manager_t; cdecl;
+    T_libvlc_audio_set_mute: procedure(p_player: Plibvlc_media_player_t; status: Integer); cdecl;
+    T_libvlc_audio_get_mute: function(p_player: Plibvlc_media_player_t): Integer; cdecl;
+    T_libvlc_media_player_is_playing: function(p_player: Plibvlc_media_player_t): Integer; cdecl;
+
+    // НОВЫЕ ОБЪЯВЛЕНИЯ ФУНКЦИЙ VLC
+    T_libvlc_media_player_get_buffer: function(p_mi: Plibvlc_media_player_t): Single; cdecl;
+    T_libvlc_media_player_get_media: function(p_mi: Plibvlc_media_player_t): Plibvlc_media_t; cdecl;
+    T_libvlc_media_get_mrl: function(p_md: Plibvlc_media_t): PAnsiChar; cdecl;
+
+    // НОВЫЕ ПОЛЯ ДЛЯ РЕАЛЬНОГО ПРОГРЕССА
+    FLoadStartTime: Cardinal;       // Время начала загрузки
+    FLastProgressUpdate: Cardinal;  // Время последнего обновления прогресса
+    FProgressTimer: TTimer;         // Таймер для обновления прогресса
 
     // События компонента
     FOnPlaying: TVlcNotifyEvent;
@@ -114,15 +132,13 @@ type
     procedure ApplyAppropriateHeaders(const AUrl: string);
     procedure StopCurrentStream;
     procedure SetupEventHandlers;
-    procedure UpdateLoadingProgress;
     procedure ApplyQualitySettings;
     function GetQualityOptions: TStringList;
 
-    // Методы для управления статусом загрузки
-    procedure CreateLoadingStatusLabel;
-    procedure DestroyLoadingStatusLabel;
-    procedure UpdateLoadingStatusLayout;
-    procedure SetLoadingStatusText(const AText: string);
+    // Методы для управления статусом
+    procedure CreateStatusLabel;
+    procedure DestroyStatusLabel;
+    procedure UpdateStatusLayout;
 
     // Методы для рисования картинки на handle
     procedure CreateLogoBitmap;
@@ -133,9 +149,34 @@ type
     procedure DrawLogoOnHandle;
     procedure ForceRedrawLogo;
 
-    // НОВЫЕ МЕТОДЫ ДЛЯ ЗАПИСИ СОБЫТИЙ
+    // НОВЫЕ МЕТОДЫ ДЛЯ ЗАПИСИ СОБЯТИЙ
     procedure SendLoadingEvent(const AEvent: string; AProgress: Integer = -1);
     procedure SendStateEvent(const AState: string);
+
+    // НОВЫЕ МЕТОДЫ ДЛЯ БУФЕРИЗАЦИИ И СЕТЕВЫХ ПОТОКОВ
+    function GetBufferingLevel: Integer;
+    function IsNetworkStream: Boolean;
+
+    // НОВЫЕ МЕТОДЫ ДЛЯ РЕАЛЬНОГО ПРОГРЕССА
+    function GetActualLoadingProgress: Integer;
+    procedure UpdateRealLoadingProgress;
+    procedure ProgressTimerTick(Sender: TObject);
+
+    // НОВЫЕ МЕТОДЫ ДЛЯ РАБОТЫ С PNG
+    function IsLogoReady: Boolean;
+    procedure LoadLogoFromPNGFile(const AFileName: string);
+
+    // НОВЫЕ МЕТОДЫ ДЛЯ ОКНА КАРТИНКИ
+    procedure CreateLogoWindow;
+    procedure DestroyLogoWindow;
+    procedure UpdateLogoWindowPosition;
+    procedure SetLogoWindowVisible(Visible: Boolean);
+
+    // НОВЫЕ МЕТОДЫ ДЛЯ УПРАВЛЕНИЯ РОДИТЕЛЬСКИМ КОНТРОЛОМ
+    procedure SaveOriginalParent;
+    procedure TransferToVideoParent;
+    procedure TransferBackToOriginalParent;
+
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -178,6 +219,10 @@ type
     procedure ShowLogo;
     procedure HideLogo;
     function IsLogoVisible: Boolean;
+    procedure UpdateLogo; // НОВЫЙ МЕТОД для принудительного обновления
+
+    // НОВЫЙ МЕТОД ДЛЯ ОБНОВЛЕНИЯ LAYOUT
+    procedure UpdateVideoLayout;
 
     // Публичные свойства
     property Handle: HWND read FVideoHandle write FVideoHandle;
@@ -190,6 +235,13 @@ type
     property ForcedResolution: string read FForcedResolution write SetForcedResolution;
     property Muted: Boolean read GetMuted write SetMuted;
     property LogoVisible: Boolean read FLogoVisible write SetLogoVisible;
+
+    // ПРОСТЫЕ МЕТОДЫ ДЛЯ УПРАВЛЕНИЯ STATUS LABEL
+    procedure SetStatusText(const AText: string);
+    procedure ClearStatus;
+    function GetStatusText: string;
+    procedure ShowStatus;
+    procedure HideStatus;
 
   published
     // Опубликованные свойства
@@ -256,28 +308,31 @@ begin
 
     libvlc_MediaPlayerPlaying:
       begin
+        // Останавливаем таймер прогресса
+        Player.FProgressTimer.Enabled := False;
+
         Player.SetState(vlcPlaying);
-        Player.FIsLoading := False;
+
+        // Устанавливаем 100% прогресс при начале воспроизведения
         Player.FLoadingProgress := 100;
+        Player.FIsLoading := False;
 
         // Запускаем таймер перерисовки если картинка видима
-        if Player.FLogoVisible then
+        if Player.FLogoVisible and Player.IsLogoReady then
           Player.FLogoPaintTimer.Enabled := True;
-
-        // Дополнительная проверка реального состояния
-        if Player.IsActuallyPlaying then
-          Player.Log('Воспроизведение началось (подтверждено VLC)')
-        else
-          Player.Log('Состояние Playing, но VLC не воспроизводит');
 
         if Assigned(Player.FOnLoadingProgress) then
           Player.FOnLoadingProgress(Player, 100);
 
-        // Скрываем статус загрузки при начале воспроизведения
-        Player.SetLoadingStatusText('');
+        // Скрываем статус загрузки
+        Player.SetStatusText('');
+
+        // ПЕРЕНОСИМ STATUS LABEL НА ВИДЕО
+        Player.TransferToVideoParent;
 
         Player.SendLoadingEvent('PLAYING');
         Player.SendStateEvent('PLAYING');
+        Player.Log('Воспроизведение началось');
       end;
 
     libvlc_MediaPlayerPaused:
@@ -292,13 +347,20 @@ begin
 
     libvlc_MediaPlayerStopped:
       begin
+        // Останавливаем таймер прогресса
+        Player.FProgressTimer.Enabled := False;
+
         Player.SetState(vlcStopped);
         Player.FIsLoading := False;
         Player.FLoadingProgress := 0;
         Player.Log('Воспроизведение остановлено');
-        Player.SetLoadingStatusText('');
+        Player.SetStatusText('');
         // Останавливаем таймер перерисовки
         Player.FLogoPaintTimer.Enabled := False;
+
+        // ВОЗВРАЩАЕМ STATUS LABEL ОБРАТНО
+        Player.TransferBackToOriginalParent;
+
         Player.SendLoadingEvent('STOPPED');
         Player.SendStateEvent('STOPPED');
       end;
@@ -308,6 +370,10 @@ begin
         Player.Log('Воспроизведение завершено');
         // Останавливаем таймер перерисовки
         Player.FLogoPaintTimer.Enabled := False;
+
+        // ВОЗВРАЩАЕМ STATUS LABEL ОБРАТНО
+        Player.TransferBackToOriginalParent;
+
         Player.SendLoadingEvent('END_REACHED');
         if Assigned(Player.FOnEndReached) then
           Player.FOnEndReached(Player);
@@ -315,13 +381,20 @@ begin
 
     libvlc_MediaPlayerEncounteredError:
       begin
+        // Останавливаем таймер прогресса
+        Player.FProgressTimer.Enabled := False;
+
         Player.SetState(vlcError);
         Player.Log('Ошибка воспроизведения');
         Player.FIsLoading := False;
         Player.FLoadingProgress := 0;
-        Player.SetLoadingStatusText('Ошибка загрузки');
+        Player.SetStatusText('Ошибка загрузки');
         // Останавливаем таймер перерисовки
         Player.FLogoPaintTimer.Enabled := False;
+
+        // ВОЗВРАЩАЕМ STATUS LABEL ОБРАТНО ПРИ ОШИБКЕ
+        Player.TransferBackToOriginalParent;
+
         Player.SendLoadingEvent('ERROR');
         Player.SendStateEvent('ERROR');
       end;
@@ -347,15 +420,28 @@ begin
   FForcedResolution := '';
   FMuted := False;
 
-  FLoadingStatusLabel := nil;
+  FStatusLabel := nil;
+  FStatusWindow := 0;
+  FOriginalParent := nil;
   FLogoVisible := False;
   FLogoBitmap := nil;
+  FLogoWindow := 0;
+
+  // Инициализация новых полей для прогресса
+  FLoadStartTime := 0;
+  FLastProgressUpdate := 0;
 
   // Создаем таймер для перерисовки картинки
   FLogoPaintTimer := TTimer.Create(Self);
   FLogoPaintTimer.Interval := 100;
   FLogoPaintTimer.Enabled := False;
   FLogoPaintTimer.OnTimer := LogoPaintTimer;
+
+  // Создаем таймер для обновления прогресса загрузки
+  FProgressTimer := TTimer.Create(Self);
+  FProgressTimer.Interval := 500; // Обновление каждые 500ms
+  FProgressTimer.Enabled := False;
+  FProgressTimer.OnTimer := ProgressTimerTick;
 
   // Устанавливаем базовые заголовки по умолчанию
   SetBasicHeaders;
@@ -369,23 +455,210 @@ begin
   FOnBuffering := nil;
   FOnQualityChanged := nil;
 
-  // Останавливаем таймер
+  // Останавливаем таймеры
   FLogoPaintTimer.Enabled := False;
+  FProgressTimer.Enabled := False;
+
+  // Уничтожаем окно картинки
+  DestroyLogoWindow;
+
+  // Уничтожаем окно статуса
+  DestroyStatusLabel;
 
   // Освобождаем ресурсы VLC
   FreeVLC;
 
   // Освобождаем элементы интерфейса
-  DestroyLoadingStatusLabel;
-  DestroyLogoBitmap;
+  if Assigned(FStatusLabel) then
+  begin
+    FStatusLabel.Free;
+    FStatusLabel := nil;
+  end;
 
   // Освобождаем объекты
   FHttpHeaders.Free;
+  FLogoPaintTimer.Free;
+  FProgressTimer.Free;
 
   inherited Destroy;
 end;
 
-// Методы для рисования картинки на handle
+// МЕТОДЫ ДЛЯ УПРАВЛЕНИЯ STATUS LABEL
+
+procedure TVlcPlayerEx.CreateStatusLabel;
+begin
+  if FVideoHandle = 0 then Exit;
+
+  // Создаем отдельное окно для статуса поверх VLC
+  if FStatusWindow = 0 then
+  begin
+    FStatusWindow := CreateWindowEx(
+      WS_EX_LAYERED or WS_EX_TRANSPARENT or WS_EX_TOPMOST or WS_EX_NOACTIVATE,
+      'STATIC',
+      PChar(''),
+      WS_POPUP,
+      0, 0, 300, 25,
+      FVideoHandle, 0, HInstance, nil
+    );
+
+    if FStatusWindow <> 0 then
+    begin
+      SetLayeredWindowAttributes(FStatusWindow, RGB(0, 0, 0), 180, LWA_ALPHA or LWA_COLORKEY);
+      Log('Окно статуса создано: ' + IntToStr(FStatusWindow));
+    end
+    else
+    begin
+      Log('Ошибка создания окна статуса');
+    end;
+  end;
+end;
+
+procedure TVlcPlayerEx.DestroyStatusLabel;
+begin
+  if FStatusWindow <> 0 then
+  begin
+    DestroyWindow(FStatusWindow);
+    FStatusWindow := 0;
+  end;
+end;
+
+procedure TVlcPlayerEx.UpdateStatusLayout;
+var
+  ParentRect: TRect;
+begin
+  if FStatusWindow = 0 then Exit;
+
+  if GetWindowRect(FVideoHandle, ParentRect) then
+  begin
+    SetWindowPos(
+      FStatusWindow, HWND_TOPMOST,
+      ParentRect.Left + 10,
+      ParentRect.Bottom - 35,
+      300, 25,
+      SWP_NOACTIVATE or SWP_SHOWWINDOW
+    );
+    UpdateWindow(FStatusWindow);
+  end;
+end;
+
+// ПРОСТЫЕ ПУБЛИЧНЫЕ МЕТОДЫ ДЛЯ STATUS LABEL
+
+procedure TVlcPlayerEx.SetStatusText(const AText: string);
+var
+  DC: HDC;
+  Rect: TRect;
+  OldFont, NewFont: HGDIOBJ;
+begin
+  if FVideoHandle = 0 then Exit;
+
+  // Создаем окно статуса если нужно
+  if FStatusWindow = 0 then
+    CreateStatusLabel;
+
+  if FStatusWindow <> 0 then
+  begin
+    // Обновляем позицию
+    UpdateStatusLayout;
+
+    // Рисуем текст
+    DC := GetDC(FStatusWindow);
+    try
+      // Очищаем область
+      GetClientRect(FStatusWindow, Rect);
+      FillRect(DC, Rect, GetStockObject(BLACK_BRUSH));
+
+      // Рисуем текст если он есть
+      if AText <> '' then
+      begin
+        SetBkMode(DC, TRANSPARENT);
+        SetTextColor(DC, RGB(255, 255, 255));
+
+        // Создаем шрифт
+        NewFont := CreateFont(16, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET,
+          OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+          DEFAULT_PITCH or FF_DONTCARE, 'Arial');
+        OldFont := SelectObject(DC, NewFont);
+
+        // Рисуем текст
+        DrawText(DC, PChar(AText), -1, Rect, DT_LEFT or DT_VCENTER or DT_SINGLELINE);
+
+        // Восстанавливаем шрифт
+        SelectObject(DC, OldFont);
+        DeleteObject(NewFont);
+      end;
+    finally
+      ReleaseDC(FStatusWindow, DC);
+    end;
+
+    // Показываем/скрываем окно
+    if AText <> '' then
+      ShowWindow(FStatusWindow, SW_SHOWNA)
+    else
+      ShowWindow(FStatusWindow, SW_HIDE);
+
+    Log('Статус установлен: ' + AText);
+  end;
+end;
+
+procedure TVlcPlayerEx.ClearStatus;
+begin
+  SetStatusText('');
+  Log('Статус очищен');
+end;
+
+function TVlcPlayerEx.GetStatusText: string;
+begin
+  // Для оконного статуса возвращаем пустую строку
+  // так как текст рисуется непосредственно в окне
+  Result := '';
+end;
+
+procedure TVlcPlayerEx.ShowStatus;
+begin
+  if FStatusWindow <> 0 then
+    ShowWindow(FStatusWindow, SW_SHOWNA);
+end;
+
+procedure TVlcPlayerEx.HideStatus;
+begin
+  if FStatusWindow <> 0 then
+    ShowWindow(FStatusWindow, SW_HIDE);
+end;
+
+// НОВЫЕ МЕТОДЫ ДЛЯ УПРАВЛЕНИЯ РОДИТЕЛЬСКИМ КОНТРОЛОМ
+
+procedure TVlcPlayerEx.SaveOriginalParent;
+begin
+  // Не используется для оконного статуса
+end;
+
+procedure TVlcPlayerEx.TransferToVideoParent;
+begin
+  // Обновляем позицию статуса поверх видео
+  UpdateStatusLayout;
+  Log('Status Label перенесен на видео');
+end;
+
+procedure TVlcPlayerEx.TransferBackToOriginalParent;
+begin
+  // Скрываем статус при остановке
+  HideStatus;
+  Log('Status Label скрыт');
+end;
+
+// НОВЫЙ МЕТОД ДЛЯ ОБНОВЛЕНИЯ LAYOUT
+procedure TVlcPlayerEx.UpdateVideoLayout;
+begin
+  // Обновляем позицию картинки
+  UpdateLogoWindowPosition;
+
+  // Обновляем позицию статуса
+  UpdateStatusLayout;
+
+  Log('Layout видеоплеера обновлен');
+end;
+
+// МЕТОДЫ ДЛЯ РИСОВАНИЯ КАРТИНКИ НА HANDLE
 
 procedure TVlcPlayerEx.CreateLogoBitmap;
 begin
@@ -393,8 +666,8 @@ begin
   begin
     FLogoBitmap := TBitmap.Create;
     FLogoBitmap.PixelFormat := pf32bit;
-    FLogoBitmap.Transparent := True;
-    FLogoBitmap.TransparentColor := clFuchsia;
+    FLogoBitmap.HandleType := bmDIB;
+    FLogoBitmap.Transparent := False;
   end;
 end;
 
@@ -402,27 +675,15 @@ procedure TVlcPlayerEx.DestroyLogoBitmap;
 begin
   if Assigned(FLogoBitmap) then
   begin
+    FLogoPaintTimer.Enabled := False;
     FLogoBitmap.Free;
     FLogoBitmap := nil;
   end;
 end;
 
 procedure TVlcPlayerEx.UpdateLogoPosition;
-var
-  ParentControl: TWinControl;
 begin
-  if FVideoHandle = 0 then Exit;
-
-  ParentControl := FindControl(FVideoHandle);
-  if ParentControl = nil then Exit;
-
-  // Правый верхний угол с отступом 10 пикселей, размер 50x50
-  FLogoPosition := Rect(
-    ParentControl.Width - 60,
-    10,
-    ParentControl.Width - 10,
-    60
-  );
+  UpdateLogoWindowPosition;
 end;
 
 procedure TVlcPlayerEx.SetLogoVisible(const Value: Boolean);
@@ -431,18 +692,26 @@ begin
   begin
     FLogoVisible := Value;
 
-    // Запускаем/останавливаем таймер перерисовки
-    FLogoPaintTimer.Enabled := FLogoVisible and IsPlaying;
-
     if FLogoVisible then
     begin
-      UpdateLogoPosition;
-      ForceRedrawLogo;
-      Log('Картинка показана');
+      if IsLogoReady then
+      begin
+        if FLogoWindow = 0 then
+          CreateLogoWindow;
+
+        FLogoPaintTimer.Enabled := True;
+        SetLogoWindowVisible(True);
+        Log('Картинка показана');
+      end
+      else
+      begin
+        Log('Не удалось показать картинку: не готова');
+      end;
     end
     else
     begin
-      ForceRedrawLogo;
+      FLogoPaintTimer.Enabled := False;
+      SetLogoWindowVisible(False);
       Log('Картинка скрыта');
     end;
   end;
@@ -450,64 +719,241 @@ end;
 
 procedure TVlcPlayerEx.LogoPaintTimer(Sender: TObject);
 begin
-  // Рисуем картинку только если воспроизведение идет и картинка видима
-  if FLogoVisible and IsPlaying and (FVideoHandle <> 0) then
+  if FLogoVisible and IsLogoReady then
   begin
     DrawLogoOnHandle;
+  end
+  else
+  begin
+    FLogoPaintTimer.Enabled := False;
   end;
 end;
 
 procedure TVlcPlayerEx.DrawLogoOnHandle;
 var
   DC: HDC;
+  BlendFunction: TBlendFunction;
+  LogoDC: HDC;
+  Bitmap: HBITMAP;
+  OldBitmap: HGDIOBJ;
 begin
-  if (FVideoHandle = 0) or not Assigned(FLogoBitmap) or FLogoBitmap.Empty then
-    Exit;
+  if not IsLogoReady then Exit;
+
+  if FLogoWindow = 0 then
+    CreateLogoWindow;
+
+  if FLogoWindow = 0 then Exit;
 
   try
-    // Получаем контекст устройства окна
-    DC := GetDC(FVideoHandle);
+    DC := GetDC(FLogoWindow);
     if DC = 0 then Exit;
 
     try
-      // Используем прозрачную отрисовку
-      SetStretchBltMode(DC, HALFTONE);
-      SetBrushOrgEx(DC, 0, 0, nil);
+      var ClearBrush := CreateSolidBrush(RGB(0, 0, 0));
+      var OldBrush := SelectObject(DC, ClearBrush);
+      PatBlt(DC, 0, 0, 50, 50, PATCOPY);
+      SelectObject(DC, OldBrush);
+      DeleteObject(ClearBrush);
 
-      // Рисуем картинку с прозрачностью
-      TransparentBlt(
-        DC,
-        FLogoPosition.Left,
-        FLogoPosition.Top,
-        FLogoPosition.Right - FLogoPosition.Left,
-        FLogoPosition.Bottom - FLogoPosition.Top,
-        FLogoBitmap.Canvas.Handle,
-        0, 0,
-        FLogoBitmap.Width,
-        FLogoBitmap.Height,
-        FLogoBitmap.TransparentColor
-      );
+      LogoDC := CreateCompatibleDC(DC);
+      if LogoDC = 0 then Exit;
+
+      try
+        Bitmap := FLogoBitmap.Handle;
+        OldBitmap := SelectObject(LogoDC, Bitmap);
+
+        BlendFunction.BlendOp := AC_SRC_OVER;
+        BlendFunction.BlendFlags := 0;
+        BlendFunction.SourceConstantAlpha := 255;
+        BlendFunction.AlphaFormat := AC_SRC_ALPHA;
+
+        Windows.AlphaBlend(
+          DC, 0, 0, 50, 50,
+          LogoDC, 0, 0, FLogoBitmap.Width, FLogoBitmap.Height,
+          BlendFunction
+        );
+
+        SelectObject(LogoDC, OldBitmap);
+
+      finally
+        DeleteDC(LogoDC);
+      end;
+
     finally
-      ReleaseDC(FVideoHandle, DC);
+      ReleaseDC(FLogoWindow, DC);
     end;
+
   except
     on E: Exception do
+    begin
       Log('Ошибка рисования картинки: ' + E.Message);
+    end;
   end;
 end;
 
 procedure TVlcPlayerEx.ForceRedrawLogo;
 begin
-  if FVideoHandle = 0 then Exit;
+  if FLogoVisible and IsLogoReady then
+  begin
+    UpdateLogoWindowPosition;
+    DrawLogoOnHandle;
+    if FLogoWindow <> 0 then
+      UpdateWindow(FLogoWindow);
+  end;
+end;
 
-  // Принудительно перерисовываем область картинки
-  InvalidateRect(FVideoHandle, @FLogoPosition, True);
-  UpdateWindow(FVideoHandle);
+procedure TVlcPlayerEx.UpdateLogo;
+begin
+  if FLogoVisible and IsLogoReady then
+  begin
+    UpdateLogoPosition;
+    ForceRedrawLogo;
+  end;
+end;
+
+// МЕТОДЫ ДЛЯ ОКНА КАРТИНКИ
+
+procedure TVlcPlayerEx.CreateLogoWindow;
+begin
+  if FLogoWindow <> 0 then Exit;
+
+  FLogoWindow := CreateWindowEx(
+    WS_EX_LAYERED or WS_EX_TOPMOST or WS_EX_NOACTIVATE,
+    'STATIC', nil, WS_POPUP,
+    0, 0, 50, 50,
+    FVideoHandle, 0, HInstance, nil
+  );
+
+  if FLogoWindow <> 0 then
+  begin
+    SetLayeredWindowAttributes(FLogoWindow, RGB(0, 0, 0), 0, LWA_COLORKEY);
+    Log('Окно для картинки создано: ' + IntToStr(FLogoWindow));
+  end
+  else
+  begin
+    Log('Ошибка создания окна для картинки');
+  end;
+end;
+
+procedure TVlcPlayerEx.DestroyLogoWindow;
+begin
+  if FLogoWindow <> 0 then
+  begin
+    DestroyWindow(FLogoWindow);
+    FLogoWindow := 0;
+  end;
+end;
+
+procedure TVlcPlayerEx.UpdateLogoWindowPosition;
+var
+  ParentRect: TRect;
+begin
+  if (FVideoHandle = 0) or (FLogoWindow = 0) then Exit;
+
+  if not GetWindowRect(FVideoHandle, ParentRect) then Exit;
+
+  SetWindowPos(
+    FLogoWindow, HWND_TOPMOST,
+    ParentRect.Right - 60, ParentRect.Top + 10,
+    50, 50, SWP_NOACTIVATE or SWP_SHOWWINDOW
+  );
+
+  UpdateWindow(FLogoWindow);
+end;
+
+procedure TVlcPlayerEx.SetLogoWindowVisible(Visible: Boolean);
+begin
+  if FLogoWindow = 0 then Exit;
+
+  if Visible then
+  begin
+    UpdateLogoWindowPosition;
+    ShowWindow(FLogoWindow, SW_SHOWNA);
+    DrawLogoOnHandle;
+  end
+  else
+  begin
+    ShowWindow(FLogoWindow, SW_HIDE);
+  end;
+end;
+
+// НОВЫЕ МЕТОДЫ ДЛЯ РАБОТЫ С PNG
+
+function TVlcPlayerEx.IsLogoReady: Boolean;
+begin
+  Result := (FLogoBitmap <> nil) and (not FLogoBitmap.Empty) and
+            (FVideoHandle <> 0) and IsWindow(FVideoHandle) and
+            (FLogoBitmap.Width > 0) and (FLogoBitmap.Height > 0);
+end;
+
+procedure TVlcPlayerEx.LoadLogoFromPNGFile(const AFileName: string);
+var
+  PNG: TPNGImage;
+begin
+  if not FileExists(AFileName) then
+  begin
+    Log('Файл PNG не найден: ' + AFileName);
+    Exit;
+  end;
+
+  try
+    if FLogoBitmap <> nil then
+      DestroyLogoBitmap;
+
+    CreateLogoBitmap;
+
+    PNG := TPNGImage.Create;
+    try
+      PNG.LoadFromFile(AFileName);
+
+      var OriginalWidth := PNG.Width;
+      var OriginalHeight := PNG.Height;
+      var Ratio := Math.Min(50 / OriginalWidth, 50 / OriginalHeight);
+      var NewWidth := Round(OriginalWidth * Ratio);
+      var NewHeight := Round(OriginalHeight * Ratio);
+
+      FLogoBitmap.Width := NewWidth;
+      FLogoBitmap.Height := NewHeight;
+      FLogoBitmap.PixelFormat := pf32bit;
+
+      FLogoBitmap.Canvas.Brush.Color := clBlack;
+      FLogoBitmap.Canvas.FillRect(Rect(0, 0, NewWidth, NewHeight));
+
+      var DestRect := Rect(0, 0, NewWidth, NewHeight);
+      FLogoBitmap.Canvas.StretchDraw(DestRect, PNG);
+
+      Log('PNG картинка загружена: ' + AFileName +
+          ' Оригинал: ' + IntToStr(OriginalWidth) + 'x' + IntToStr(OriginalHeight) +
+          ' Масштаб: ' + IntToStr(NewWidth) + 'x' + IntToStr(NewHeight));
+
+    finally
+      PNG.Free;
+    end;
+
+    FLogoFileName := AFileName;
+    UpdateLogoPosition;
+
+    if FLogoVisible then
+    begin
+      ForceRedrawLogo;
+      FLogoPaintTimer.Enabled := True;
+    end;
+
+  except
+    on E: Exception do
+    begin
+      Log('Ошибка загрузки PNG картинки: ' + E.Message);
+      if FLogoBitmap <> nil then
+        DestroyLogoBitmap;
+    end;
+  end;
 end;
 
 // Публичные методы для управления картинкой
 
 procedure TVlcPlayerEx.LoadLogoFromFile(const AFileName: string);
+var
+  Ext: string;
 begin
   if not FileExists(AFileName) then
   begin
@@ -515,22 +961,53 @@ begin
     Exit;
   end;
 
-  try
-    CreateLogoBitmap;
-    FLogoBitmap.LoadFromFile(AFileName);
-    FLogoFileName := AFileName;
+  Ext := LowerCase(ExtractFileExt(AFileName));
 
-    // Масштабируем до 50x50
-    FLogoBitmap.Width := 50;
-    FLogoBitmap.Height := 50;
+  if Ext = '.png' then
+  begin
+    LoadLogoFromPNGFile(AFileName);
+  end
+  else
+  begin
+    try
+      if FLogoBitmap <> nil then
+        DestroyLogoBitmap;
 
-    UpdateLogoPosition;
-    Log('Картинка загружена: ' + AFileName);
+      CreateLogoBitmap;
 
-  except
-    on E: Exception do
-      Log('Ошибка загрузки картинки: ' + E.Message);
+      var TempBitmap := TBitmap.Create;
+      try
+        TempBitmap.LoadFromFile(AFileName);
+        TempBitmap.PixelFormat := pf32bit;
+
+        var Ratio := Math.Min(50 / TempBitmap.Width, 50 / TempBitmap.Height);
+        var NewWidth := Round(TempBitmap.Width * Ratio);
+        var NewHeight := Round(TempBitmap.Height * Ratio);
+
+        FLogoBitmap.Width := NewWidth;
+        FLogoBitmap.Height := NewHeight;
+        FLogoBitmap.PixelFormat := pf32bit;
+
+        FLogoBitmap.Canvas.Brush.Color := clBlack;
+        FLogoBitmap.Canvas.FillRect(Rect(0, 0, NewWidth, NewHeight));
+        FLogoBitmap.Canvas.StretchDraw(Rect(0, 0, NewWidth, NewHeight), TempBitmap);
+
+      finally
+        TempBitmap.Free;
+      end;
+
+      FLogoFileName := AFileName;
+      UpdateLogoPosition;
+      Log('Картинка загружена: ' + AFileName);
+
+    except
+      on E: Exception do
+        Log('Ошибка загрузки картинки: ' + E.Message);
+    end;
   end;
+
+  if FLogoVisible then
+    ForceRedrawLogo;
 end;
 
 procedure TVlcPlayerEx.ShowLogo;
@@ -548,99 +1025,180 @@ begin
   Result := FLogoVisible;
 end;
 
-// Существующие методы без изменений
+// НОВЫЕ МЕТОДЫ ДЛЯ РЕАЛЬНОГО ПРОГРЕССА
 
-procedure TVlcPlayerEx.CreateLoadingStatusLabel;
+function TVlcPlayerEx.GetActualLoadingProgress: Integer;
 var
-  ParentControl: TWinControl;
+  Duration, Position: Int64;
+  BufferingLevel: Integer;
 begin
-  if FVideoHandle = 0 then Exit;
+  Result := -1;
+
+  if not IsInitialized or (FPlayer = nil) then
+    Exit;
 
   try
-    ParentControl := FindControl(FVideoHandle);
-    if ParentControl = nil then
+    BufferingLevel := GetBufferingLevel;
+
+    if (BufferingLevel >= 0) and (BufferingLevel <= 100) then
     begin
-      Log('Не удалось найти контрол плеера для статуса загрузки');
+      Result := BufferingLevel;
       Exit;
     end;
 
-    FLoadingStatusLabel := TLabel.Create(ParentControl);
-    with FLoadingStatusLabel do
-    begin
-      Parent := ParentControl;
-      AutoSize := False;
-      Alignment := taLeftJustify;
-      Font.Size := 10;
-      Font.Color := clWhite;
-      Font.Style := [fsBold];
-      Color := $80000000;
-      Transparent := False;
-      Visible := False;
+    Duration := GetDuration;
+    Position := GetPosition;
 
-      Left := 10;
-      Top := ParentControl.Height - 30;
-      Width := 200;
-      Height := 20;
-      BringToFront;
+    if (Duration > 0) and (Position >= 0) then
+    begin
+      Result := Round((Position / Duration) * 100);
+      if Result > 100 then
+        Result := 100;
+    end
+    else if (Duration = 0) and (FState = vlcLoading) then
+    begin
+      Result := 50;
     end;
 
-    Log('Label статуса загрузки создан');
-
   except
     on E: Exception do
-      Log('Ошибка создания Label статуса загрузки: ' + E.Message);
+    begin
+      Log('Ошибка получения прогресса загрузки: ' + E.Message);
+      Result := -1;
+    end;
   end;
 end;
 
-procedure TVlcPlayerEx.DestroyLoadingStatusLabel;
-begin
-  if Assigned(FLoadingStatusLabel) then
-  begin
-    FLoadingStatusLabel.Free;
-    FLoadingStatusLabel := nil;
-  end;
-end;
-
-procedure TVlcPlayerEx.UpdateLoadingStatusLayout;
+procedure TVlcPlayerEx.UpdateRealLoadingProgress;
 var
-  ParentControl: TWinControl;
+  ActualProgress: Integer;
+  CurrentTime: Cardinal;
 begin
-  if (FVideoHandle = 0) or not Assigned(FLoadingStatusLabel) then Exit;
+  if not FIsLoading then Exit;
 
-  try
-    ParentControl := FindControl(FVideoHandle);
-    if ParentControl = nil then Exit;
+  ActualProgress := GetActualLoadingProgress;
 
-    FLoadingStatusLabel.Left := 10;
-    FLoadingStatusLabel.Top := ParentControl.Height - 30;
-    FLoadingStatusLabel.Width := 200;
-    FLoadingStatusLabel.Height := 20;
-    FLoadingStatusLabel.BringToFront;
+  if ActualProgress >= 0 then
+  begin
+    if (ActualProgress > FLoadingProgress) or
+       ((GetTickCount - FLastProgressUpdate) > 1000) then
+    begin
+      FLoadingProgress := ActualProgress;
+      FLastProgressUpdate := GetTickCount;
 
-  except
-    on E: Exception do
-      Log('Ошибка обновления расположения статуса загрузки: ' + E.Message);
+      if (FLoadingProgress mod 25 = 0) or (FLoadingProgress = 100) then
+        Log('Прогресс загрузки: ' + IntToStr(FLoadingProgress) + '%');
+
+      if Assigned(FOnLoadingProgress) then
+        FOnLoadingProgress(Self, FLoadingProgress);
+
+      SetStatusText('Загрузка: ' + IntToStr(FLoadingProgress) + '%');
+      SendLoadingEvent('LOADING_PROGRESS', FLoadingProgress);
+    end;
+  end
+  else
+  begin
+    CurrentTime := GetTickCount;
+    if (CurrentTime - FLoadStartTime) < 30000 then
+    begin
+      if (CurrentTime - FLastProgressUpdate) > 2000 then
+      begin
+        if FLoadingProgress < 80 then
+          FLoadingProgress := FLoadingProgress + 10
+        else if FLoadingProgress < 95 then
+          FLoadingProgress := FLoadingProgress + 5;
+
+        FLastProgressUpdate := CurrentTime;
+
+        if Assigned(FOnLoadingProgress) then
+          FOnLoadingProgress(Self, FLoadingProgress);
+
+        SetStatusText('Подключение... ' + IntToStr(FLoadingProgress) + '%');
+        SendLoadingEvent('LOADING_PROGRESS', FLoadingProgress);
+      end;
+    end
+    else
+    begin
+      FIsLoading := False;
+      SetState(vlcError);
+      SetStatusText('Ошибка подключения');
+      SendLoadingEvent('LOADING_ERROR');
+      Log('Таймаут загрузки - превышено время ожидания');
+    end;
+  end;
+
+  if (FLoadingProgress >= 95) and (FState = vlcPlaying) then
+  begin
+    FIsLoading := False;
+    FLoadingProgress := 100;
+    SetStatusText('');
+    SendLoadingEvent('LOADING_COMPLETE');
+    Log('Загрузка завершена');
   end;
 end;
 
-procedure TVlcPlayerEx.SetLoadingStatusText(const AText: string);
+procedure TVlcPlayerEx.ProgressTimerTick(Sender: TObject);
 begin
-  if (FVideoHandle <> 0) and not Assigned(FLoadingStatusLabel) then
+  if FIsLoading then
+    UpdateRealLoadingProgress;
+end;
+
+// НОВЫЕ МЕТОДЫ ДЛЯ БУФЕРИЗАЦИИ И СЕТЕВЫХ ПОТОКОВ
+
+function TVlcPlayerEx.GetBufferingLevel: Integer;
+var
+  BufferLevel: Single;
+begin
+  Result := -1;
+
+  if not IsInitialized then
+    Exit;
+
+  if Assigned(T_libvlc_media_player_get_buffer) and (FPlayer <> nil) then
   begin
-    CreateLoadingStatusLabel;
-  end;
-
-  if Assigned(FLoadingStatusLabel) then
-  begin
-    FLoadingStatusLabel.Caption := AText;
-    FLoadingStatusLabel.Visible := (AText <> '');
-
-    if AText <> '' then
-      UpdateLoadingStatusLayout;
-
-    FLoadingStatusLabel.BringToFront;
+    try
+      BufferLevel := T_libvlc_media_player_get_buffer(FPlayer);
+      if BufferLevel >= 0 then
+        Result := Round(BufferLevel * 100)
+      else
+        Result := -1;
+    except
+      Result := -1;
+    end;
   end;
 end;
+
+function TVlcPlayerEx.IsNetworkStream: Boolean;
+var
+  Media: Plibvlc_media_t;
+  MRL: PAnsiChar;
+  MRLString: string;
+begin
+  Result := False;
+
+  if (FPlayer <> nil) and
+     Assigned(T_libvlc_media_player_get_media) and
+     Assigned(T_libvlc_media_get_mrl) then
+  begin
+    Media := T_libvlc_media_player_get_media(FPlayer);
+    if Media <> nil then
+    begin
+      MRL := T_libvlc_media_get_mrl(Media);
+      if MRL <> nil then
+      begin
+        MRLString := LowerCase(string(MRL));
+        Result := (Pos('http', MRLString) > 0) or
+                  (Pos('rtsp', MRLString) > 0) or
+                  (Pos('rtmp', MRLString) > 0) or
+                  (Pos('udp', MRLString) > 0) or
+                  (Pos('mms', MRLString) > 0) or
+                  (Pos('rtp', MRLString) > 0);
+      end;
+    end;
+  end;
+end;
+
+// НОВЫЕ МЕТОДЫ ДЛЯ ЗАПИСИ СОБЯТИЙ
 
 procedure TVlcPlayerEx.SendLoadingEvent(const AEvent: string; AProgress: Integer = -1);
 var
@@ -780,53 +1338,12 @@ begin
   Result := (Duration > 0) and (Position >= 0) and (not FIsLoading);
 end;
 
-function TVlcPlayerEx.GetPlayerStatus: string;
-var
-  IsVlcPlaying: Boolean;
-  Position: Single;
-begin
-  if not IsInitialized then
-    Exit('Плеер не инициализирован');
-
-  if Assigned(T_libvlc_media_player_is_playing) and (FPlayer <> nil) then
-    IsVlcPlaying := T_libvlc_media_player_is_playing(FPlayer) <> 0
-  else
-    IsVlcPlaying := False;
-
-  Position := GetPlaybackPosition;
-
-  case FState of
-    vlcPlaying:
-      begin
-        if IsVlcPlaying then
-          Result := 'Активно воспроизводится'
-        else
-          Result := 'Состояние Playing, но VLC не воспроизводит';
-
-        Result := Result + Format(' (Позиция: %.1f%%)', [Position * 100]);
-      end;
-    vlcPaused: Result := 'На паузе' + Format(' (Позиция: %.1f%%)', [Position * 100]);
-    vlcStopped: Result := 'Остановлено';
-    vlcLoading: Result := Format('Загрузка... (%d%%)', [FLoadingProgress]);
-    vlcIdle: Result := 'Ожидание';
-    vlcError: Result := 'Ошибка';
-  end;
-
-  if IsMuted then
-    Result := Result + ' | Без звука'
-  else
-    Result := Result + Format(' | %d%%', [FVolume]);
-
-  if GetDuration > 0 then
-    Result := Result + Format(' | %d сек', [GetDuration div 1000]);
-end;
-
 procedure TVlcPlayerEx.SetQualityMode(const Value: TVlcQualityMode);
 begin
   if FQualityMode <> Value then
   begin
     FQualityMode := Value;
-    Log('Режим качества установлен: ' + GetEnumName(TypeInfo(TVlcQualityMode), Ord(Value)));
+    Log('Режим качества изменен');
 
     if IsPlaying or FIsLoading then
       ApplyQualitySettings;
@@ -864,6 +1381,8 @@ end;
 
 procedure TVlcPlayerEx.StopCurrentStream;
 begin
+  FProgressTimer.Enabled := False;
+
   if FIsLoading then
   begin
     Log('Прерывание загрузки текущего потока...');
@@ -893,30 +1412,6 @@ begin
       T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerEncounteredError, @VlcEventCallback, Self);
       T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerBuffering, @VlcEventCallback, Self);
     end;
-  end;
-end;
-
-procedure TVlcPlayerEx.UpdateLoadingProgress;
-begin
-  if not FIsLoading then Exit;
-
-  if FLoadingProgress < 100 then
-    FLoadingProgress := FLoadingProgress + 1;
-
-  if Assigned(FOnLoadingProgress) then
-    FOnLoadingProgress(Self, FLoadingProgress);
-
-  SetLoadingStatusText('Загрузка: ' + IntToStr(FLoadingProgress) + '%');
-
-  SendLoadingEvent('LOADING_PROGRESS', FLoadingProgress);
-
-  Log('Загрузка: ' + IntToStr(FLoadingProgress) + '%');
-
-  if (FLoadingProgress >= 100) and (FState <> vlcPlaying) then
-  begin
-    FIsLoading := False;
-    Log('Загрузка завершена, ожидание воспроизведения...');
-    SendLoadingEvent('LOADING_COMPLETE');
   end;
 end;
 
@@ -1092,7 +1587,7 @@ begin
   if FState <> Value then
   begin
     FState := Value;
-    Log('Состояние изменено: ' + GetEnumName(TypeInfo(TVlcState), Ord(Value)));
+    Log('Состояние изменено');
 
     case Value of
       vlcPlaying:
@@ -1254,6 +1749,11 @@ begin
   @T_libvlc_audio_get_mute := GetProcAddress(FLibHandle, 'libvlc_audio_get_mute');
   @T_libvlc_media_player_is_playing := GetProcAddress(FLibHandle, 'libvlc_media_player_is_playing');
 
+  // ЗАГРУЗКА НОВЫХ ФУНКЦИЙ VLC
+  @T_libvlc_media_player_get_buffer := GetProcAddress(FLibHandle, 'libvlc_media_player_get_buffer');
+  @T_libvlc_media_player_get_media := GetProcAddress(FLibHandle, 'libvlc_media_player_get_media');
+  @T_libvlc_media_get_mrl := GetProcAddress(FLibHandle, 'libvlc_media_get_mrl');
+
   if not Assigned(T_libvlc_new) or not Assigned(T_libvlc_media_new_location) then
     raise Exception.Create('Не удалось загрузить основные функции VLC');
 end;
@@ -1345,6 +1845,10 @@ begin
   SetState(vlcLoading);
   FIsLoading := True;
   FLoadingProgress := 0;
+  FLoadStartTime := GetTickCount;
+  FLastProgressUpdate := GetTickCount;
+
+  FProgressTimer.Enabled := True;
 
   if Assigned(FOnLoading) then
     FOnLoading(Self);
@@ -1352,7 +1856,7 @@ begin
   if Assigned(FOnLoadingProgress) then
     FOnLoadingProgress(Self, 0);
 
-  SetLoadingStatusText('Загрузка: 0%');
+  SetStatusText('Подключение... 0%');
 
   try
     if FVideoHandle = 0 then
@@ -1423,8 +1927,7 @@ begin
       T_libvlc_media_player_set_hwnd(FPlayer, Pointer(FVideoHandle));
       Log('Handle окна установлен: ' + IntToStr(FVideoHandle));
 
-      // Обновляем позицию картинки
-      UpdateLogoPosition;
+      UpdateVideoLayout;
     end;
 
     if Assigned(T_libvlc_audio_set_volume) then
@@ -1432,8 +1935,6 @@ begin
 
     if Assigned(T_libvlc_audio_set_mute) then
       T_libvlc_audio_set_mute(FPlayer, Integer(FMuted));
-
-    UpdateLoadingProgress;
 
     Log('Медиа успешно загружено');
 
@@ -1445,10 +1946,12 @@ begin
   except
     on E: Exception do
     begin
+      FProgressTimer.Enabled := False;
+
       SetState(vlcError);
       FIsLoading := False;
       FLoadingProgress := 0;
-      SetLoadingStatusText('Ошибка загрузки');
+      SetStatusText('Ошибка загрузки');
       SendLoadingEvent('LOADING_ERROR', 0);
       Log('Ошибка загрузки медиа: ' + E.Message);
       if Assigned(FOnError) then
@@ -1470,9 +1973,9 @@ begin
   Log('Запуск воспроизведения...');
 
   if FIsLoading then
-    SetLoadingStatusText('Запуск воспроизведения...')
+    SetStatusText('Запуск воспроизведения...')
   else
-    SetLoadingStatusText('Перезапуск...');
+    SetStatusText('Перезапуск...');
 
   SendLoadingEvent('PLAYBACK_STARTING');
 
@@ -1482,13 +1985,16 @@ begin
   begin
     Log('Команда воспроизведения отправлена');
     Log('Проверка состояния воспроизведения: ' + GetPlayerStatus);
+
+    if FLogoVisible and IsLogoReady then
+      FLogoPaintTimer.Enabled := True;
   end
   else
   begin
     SetState(vlcError);
     FIsLoading := False;
     FLoadingProgress := 0;
-    SetLoadingStatusText('Ошибка воспроизведения');
+    SetStatusText('Ошибка воспроизведения');
     SendLoadingEvent('PLAYBACK_ERROR');
     Log('Ошибка воспроизведения, код: ' + IntToStr(ResultCode));
     if Assigned(FOnError) then
@@ -1502,18 +2008,44 @@ begin
 
   T_libvlc_media_player_pause(FPlayer);
   Log('Команда паузы отправлена');
-  SetLoadingStatusText('Пауза');
+  SetStatusText('Пауза');
   SendLoadingEvent('PLAYBACK_PAUSED');
+
+  FLogoPaintTimer.Enabled := False;
 end;
 
 procedure TVlcPlayerEx.Stop;
 begin
-  StopCurrentStream;
-  Log('Воспроизведение остановлено');
-  SetLoadingStatusText('');
+  if FPlayer = nil then Exit;
+
+  Log('Остановка воспроизведения...');
+
+  FProgressTimer.Enabled := False;
+  T_libvlc_media_player_stop(FPlayer);
+
+  SetState(vlcStopped);
+  FIsLoading := False;
+  FLoadingProgress := 0;
+
+  FLogoPaintTimer.Enabled := False;
+
+  SetStatusText('');
   SendLoadingEvent('PLAYBACK_STOPPED');
-  if Assigned(FOnStopped) then
-    FOnStopped(Self);
+  Log('Воспроизведение остановлено');
+end;
+
+function TVlcPlayerEx.GetPlayerStatus: string;
+begin
+  case FState of
+    vlcIdle: Result := 'Ожидание';
+    vlcLoading: Result := 'Загрузка';
+    vlcPlaying: Result := 'Воспроизведение';
+    vlcPaused: Result := 'Пауза';
+    vlcStopped: Result := 'Остановлен';
+    vlcError: Result := 'Ошибка';
+  else
+    Result := 'Неизвестно';
+  end;
 end;
 
 end.

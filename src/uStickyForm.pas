@@ -59,9 +59,9 @@ type
     odFile: TOpenDialog;
     sbVolume: TSpeedButton;
     tvVolume: TImageTrackBar;
-    lbEPG_Text: TLabel;
     Panel_Channels: TPanel;
     Panel_VLC_Player: TPanel;
+    PlayerStatus: TTimer;
     N1231: TMenuItem;
     procedure C1Click(Sender: TObject);
     procedure sbOpenClick(Sender: TObject);
@@ -82,6 +82,9 @@ type
     procedure sbVolumeClick(Sender: TObject);
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
     procedure FormShow(Sender: TObject);
+    procedure PlayerStatusTimer(Sender: TObject);
+    procedure FormPaint(Sender: TObject);
+    procedure N1231Click(Sender: TObject);
   private
     FChannels: TList<TChannelInfo>;
     FLogoMap: TDictionary<string, Integer>; // ключ = LowerCase(LogoURL)
@@ -807,6 +810,7 @@ var
   cur: string;
 
   ch: TChannelInfo;
+  timeRange: string;
 begin
 
   if not FVlc.IsPlaying then
@@ -831,8 +835,13 @@ begin
       cur := Trim(Copy(cur, 1, p - 1));
   end;
 
-  if Assigned(lbEPG_Text) then
-    lbEPG_Text.Caption := 'Сейчас: ' + cur;
+
+ timeRange := FormatDateTime('hh:nn', ch.CurrentStart) + ' - ' +
+               FormatDateTime('hh:nn', ch.CurrentStop);
+
+  FVlc.SetStatusText(Format('Сейчас на %s: %s (%s)',
+    [ch.Name, cur, timeRange]));
+
 end;
 
 
@@ -847,17 +856,22 @@ procedure TfrmStickyForm.OnBuffering(Sender: TObject; cache: Single);
 begin
   if Trunc(cache) < 100 then
   else
-    lbEPG_Text.Caption := '';
+    FVlc.SetStatusText('');
     EpgStatus;
 end;
 
 procedure TfrmStickyForm.OnError(Sender: TObject);
 begin
-  lbEPG_Text.Caption := '';
+  FVlc.SetStatusText('');
   LoadPNGToControl(FButtonDir + 'play.png', sbPlay);
 end;
 
 
+
+procedure TfrmStickyForm.N1231Click(Sender: TObject);
+begin
+  FVlc.SetStatusText('Канал: Первый | Время: 20:30 | Название: Новости');
+end;
 
 procedure TfrmStickyForm.N1Click(Sender: TObject);
 begin
@@ -869,6 +883,7 @@ end;
 procedure TfrmStickyForm.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
 begin
   FStopRequested := True;
+  FVlc.Free;
 end;
 
 procedure TfrmStickyForm.FormCreate(Sender: TObject);
@@ -919,7 +934,7 @@ begin
   FVlc := TVlcPlayerEx.Create(Self);
   // Сначала путь к библиотеке
   FVlc.LibPath := frmSettings.dePachVLC.Text;
-
+  FVlc.SetStatusText('');
 end;
 
 
@@ -940,6 +955,11 @@ begin
   // cleanup timers if any
   FreeAndNil(FEPGTimer);
   FreeAndNil(FEPGStartTimer);
+end;
+
+procedure TfrmStickyForm.FormPaint(Sender: TObject);
+begin
+  FVlc.UpdateLogo;
 end;
 
 procedure TfrmStickyForm.FormShow(Sender: TObject);
@@ -1010,6 +1030,11 @@ begin
 end;
 
 
+
+procedure TfrmStickyForm.PlayerStatusTimer(Sender: TObject);
+begin
+  FVlc.SetStatusText(FVlc.GetPlayerStatus);
+end;
 
 procedure TfrmStickyForm.C1Click(Sender: TObject);
 begin
@@ -1143,7 +1168,7 @@ begin
   else
     lbChannels.Canvas.TextOut(nameLeft, R.Top, 'Нет актуальных данных');
 
-  lbChannels.Canvas.Font.Size := oldFontSize;
+    lbChannels.Canvas.Font.Size := oldFontSize;
 end;
 
 
@@ -1626,7 +1651,7 @@ begin
   begin
     Fvlc.Stop;
     LoadPNGToControl(FButtonDir + 'play.png', sbPlay);
-    lbEPG_Text.Caption := '';
+    FVlc.SetStatusText('');
   end else
   begin
     idx := lbChannels.ItemIndex;
