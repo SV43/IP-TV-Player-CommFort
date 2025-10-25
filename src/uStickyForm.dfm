@@ -166,10 +166,6 @@ object frmStickyForm: TfrmStickyForm
       Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
       OnClick = N1Click
     end
-    object N1231: TMenuItem
-      Caption = '123'
-      OnClick = N1231Click
-    end
   end
   object ilLogos: TImageList
     Height = 50

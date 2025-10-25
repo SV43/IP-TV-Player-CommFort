@@ -62,7 +62,6 @@ type
     Panel_Channels: TPanel;
     Panel_VLC_Player: TPanel;
     PlayerStatus: TTimer;
-    N1231: TMenuItem;
     procedure C1Click(Sender: TObject);
     procedure sbOpenClick(Sender: TObject);
     procedure sbNextClick(Sender: TObject);
@@ -84,7 +83,6 @@ type
     procedure FormShow(Sender: TObject);
     procedure PlayerStatusTimer(Sender: TObject);
     procedure FormPaint(Sender: TObject);
-    procedure N1231Click(Sender: TObject);
   private
     FChannels: TList<TChannelInfo>;
     FLogoMap: TDictionary<string, Integer>; // ключ = LowerCase(LogoURL)
@@ -867,11 +865,6 @@ begin
 end;
 
 
-
-procedure TfrmStickyForm.N1231Click(Sender: TObject);
-begin
-  FVlc.SetStatusText('Канал: Первый | Время: 20:30 | Название: Новости');
-end;
 
 procedure TfrmStickyForm.N1Click(Sender: TObject);
 begin
