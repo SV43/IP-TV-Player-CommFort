@@ -3,7 +3,7 @@ object frmStickyForm: TfrmStickyForm
   Top = 248
   BorderIcons = []
   BorderStyle = bsNone
-  Caption = 'Sticky Form'
+  Caption = 'IPTV-Plugin Final'
   ClientHeight = 483
   ClientWidth = 979
   Color = clWhite
@@ -16,11 +16,10 @@ object frmStickyForm: TfrmStickyForm
   OnCloseQuery = FormCloseQuery
   OnCreate = FormCreate
   OnDestroy = FormDestroy
-  OnPaint = FormPaint
   OnShow = FormShow
   TextHeight = 13
   object Splitter: TSplitter
-    Left = 661
+    Left = 605
     Top = 0
     Height = 430
     Align = alRight
@@ -34,6 +33,7 @@ object frmStickyForm: TfrmStickyForm
     Width = 979
     Height = 53
     Align = alBottom
+    PopupMenu = pmMenu
     TabOrder = 0
     object sbBack: TSpeedButton
       AlignWithMargins = True
@@ -76,7 +76,8 @@ object frmStickyForm: TfrmStickyForm
       Height = 45
       Align = alRight
       Flat = True
-      ExplicitLeft = 1060
+      OnClick = sbFullScreenClick
+      ExplicitTop = 5
     end
     object sbOpen: TSpeedButton
       AlignWithMargins = True
@@ -112,10 +113,9 @@ object frmStickyForm: TfrmStickyForm
   object Panel_VLC_Player: TPanel
     Left = 0
     Top = 0
-    Width = 661
+    Width = 605
     Height = 430
     Align = alClient
-    Caption = 'IPTV-Plugin Version 2.1.0 Final'
     Color = clBlack
     Font.Charset = RUSSIAN_CHARSET
     Font.Color = clWhite
@@ -125,18 +125,41 @@ object frmStickyForm: TfrmStickyForm
     ParentBackground = False
     ParentFont = False
     TabOrder = 1
+    object FVlc: TVlcPlayer
+      Left = 1
+      Top = 1
+      Width = 603
+      Height = 428
+      LibPath = 'libvlc.dll'
+      UserAgent = 
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KH' +
+        'TML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      HttpHeaders.Strings = (
+        'Accept=*/*'
+        'Accept-Language=en-US,en;q=0.9'
+        'Accept-Encoding=gzip, deflate, br')
+      InfoText.FontSize = 10
+      InfoText.Y = 408
+      Align = alClient
+      BevelOuter = bvNone
+      Color = clBlack
+      ParentBackground = False
+      PopupMenu = pmMenu
+      TabOrder = 0
+      OnDblClick = FVlcDblClick
+    end
   end
   object Panel_Channels: TPanel
-    Left = 664
+    Left = 608
     Top = 0
-    Width = 315
+    Width = 371
     Height = 430
     Align = alRight
     TabOrder = 2
     object lbChannels: TListBox
       Left = 1
       Top = 1
-      Width = 313
+      Width = 369
       Height = 428
       Style = lbOwnerDrawVariable
       Align = alClient
@@ -145,7 +168,7 @@ object frmStickyForm: TfrmStickyForm
       Font.Height = -11
       Font.Name = 'MS Sans Serif'
       Font.Style = [fsBold]
-      ItemHeight = 54
+      ItemHeight = 80
       ParentFont = False
       PopupMenu = pmMenu
       TabOrder = 0
@@ -166,10 +189,6 @@ object frmStickyForm: TfrmStickyForm
       Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
       OnClick = N1Click
     end
-    object N1231: TMenuItem
-      Caption = '123'
-      OnClick = N1231Click
-    end
   end
   object ilLogos: TImageList
     Height = 50
@@ -187,5 +206,11 @@ object frmStickyForm: TfrmStickyForm
     OnTimer = PlayerStatusTimer
     Left = 520
     Top = 280
+  end
+  object TimeEpgStatus: TTimer
+    Interval = 15000
+    OnTimer = TimeEpgStatusTimer
+    Left = 433
+    Top = 193
   end
 end

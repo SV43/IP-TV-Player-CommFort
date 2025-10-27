@@ -9,10 +9,8 @@ uses
   uImageTrackBar in 'src\uImageTrackBar.pas',
   uSettings in 'src\uSettings.pas' {frmSettings},
   NativeXml in 'dcu\NativeXml.pas',
-  sdStreams in 'dcu\sdStreams.pas',
-  sdDebug in 'dcu\sdDebug.pas',
-  sdStringTable in 'dcu\sdStringTable.pas',
-  Vlccomponent in 'dcu\Vlccomponent.pas';
+  Vlccomponent in 'dcu\Vlccomponent.pas',
+  VlcVisualComponent in 'dcu\VlcVisualComponent.pas';
 
 //{$LIBVERSION 'cfplug'}
 

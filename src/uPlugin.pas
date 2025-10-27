@@ -23,6 +23,7 @@ procedure ppUserLeaveChannel(bInBuffer : PAnsiChar; dwInBufferSize : DWORD);
 function GetChatPanelSize() : TSize;
 procedure FixWindowPos(AForm : TfrmStickyForm);
 function Save:string;
+function Open:string;
 procedure GetChannels;
 procedure ReEnter;
 
@@ -31,7 +32,7 @@ var
   path: string;
 
 exports
-  PluginStart, ReEnter, PluginStop, Save,
+  PluginStart, ReEnter, PluginStop,Save, Open,
   PluginProcess, PluginGetData,
   PluginShowOptions, PluginShowAbout;
 
@@ -96,7 +97,7 @@ begin
     Ini.WriteString('Settings','Chann IPTV Plug', frmSettings.cbIPTVchan.Text);
     Ini.WriteString('Settings','URL M3U', frmSettings.edURLM3U.Text);
     ini.WriteBool('Settings', 'LoadEPG', frmSettings.cbJTV.Checked);
-    Ini.EraseSection('VideoLan'); // очистим старые данные
+    Ini.WriteInteger('IPTV-Player','Volume', frmStickyForm.tvVolume.Position);
   finally
     Ini.Free;
   end;
@@ -116,6 +117,8 @@ begin
     frmSettings.cbIPTVchan.Text := Ini.ReadString('Settings', 'Chann IPTV Plug','IP-TV');
     frmSettings.edURLM3U.Text   := Ini.ReadString('Settings', 'URL M3U','');
     frmSettings.cbJTV.Checked := Ini.ReadBool('Settings', 'LoadEPG', True);
+    if Assigned(frmStickyForm) and Assigned(frmStickyForm.tvVolume) then
+       frmStickyForm.tvVolume.Position := Ini.ReadInteger('IPTV-Player','Volume', 100);
   finally
     Ini.Free;
   end;
@@ -194,7 +197,6 @@ begin
     StickyChanName := frmSettings.cbIPTVchan.Text;
     Open;
     ReEnter;
-
 
     SetTimer(0, 1, TIMER_INTERVAL, @Refrash_Form);
 
@@ -275,7 +277,7 @@ begin
   end
   else if (dwID = 2810) then
   begin
-    uName := 'IPTV Plugin 2.0.3 Final';
+    uName := 'IPTV Plugin 2.1.0 Final';
     iSize := Length(uName) * 2 + 4;
     if (dwOutBufferSize = 0) then
       Result := iSize
