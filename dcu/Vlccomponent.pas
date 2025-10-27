@@ -24,7 +24,7 @@ type
   TVlcLogEvent = procedure(Sender: TObject; const Msg: string) of object;
   TVlcProgressEvent = procedure(Sender: TObject; Progress: Integer) of object;
 
-  TVlcPlayerEx = class(TCustomControl)
+  TVlcPlayerEx = class(TComponent)
   private
     FLibPath: string;              // Путь к библиотеке VLC
     FLibHandle: THandle;           // Хэндл загруженной библиотеки
@@ -33,6 +33,7 @@ type
     FVolume: Integer;              // Громкость (0-100)
     FAutoPlay: Boolean;            // Автоматическое воспроизведение
     FVideoHandle: HWND;            // Хэндл окна для вывода видео
+    FOriginalParent: TWinControl;  // Исходный родительский контрол
     FUserAgent: string;            // User-Agent для HTTP-запросов
     FReferer: string;              // Referer для HTTP-запросов
     FHttpHeaders: TStringList;     // Дополнительные HTTP-заголовки
@@ -45,15 +46,16 @@ type
     FForcedResolution: string;     // Принудительное разрешение
     FMuted: Boolean;               // Флаг состояния звука (включен/выключен)
 
+    // Элементы управления на плеере
+    FStatusLabel: TLabel;          // Label для статуса в левом нижнем углу
+    FStatusWindow: HWND;           // Окно для статуса поверх VLC
+
     // Переменные для рисования картинки
     FLogoBitmap: TBitmap;          // Битовой образ картинки
     FLogoVisible: Boolean;         // Видимость картинки
     FLogoFileName: string;         // Имя файла картинки
     FLogoPaintTimer: TTimer;       // Таймер для перерисовки картинки
-
-    // Переменные для статуса
-    FStatusText: string;           // Текст статуса
-    FStatusVisible: Boolean;       // Видимость статуса
+    FLogoWindow: HWND;             // Окно для картинки поверх VLC
 
     // Указатели на объекты VLC
     FInstance: Plibvlc_instance_t;      // Экземпляр VLC
@@ -133,12 +135,18 @@ type
     procedure ApplyQualitySettings;
     function GetQualityOptions: TStringList;
 
-    // Методы для рисования картинки на канвасе
+    // Методы для управления статусом
+    procedure CreateStatusLabel;
+    procedure DestroyStatusLabel;
+    procedure UpdateStatusLayout;
+
+    // Методы для рисования картинки на handle
     procedure CreateLogoBitmap;
     procedure DestroyLogoBitmap;
+    procedure UpdateLogoPosition;
     procedure SetLogoVisible(const Value: Boolean);
     procedure LogoPaintTimer(Sender: TObject);
-    procedure DrawLogoOnCanvas;
+    procedure DrawLogoOnHandle;
     procedure ForceRedrawLogo;
 
     // НОВЫЕ МЕТОДЫ ДЛЯ ЗАПИСИ СОБЯТИЙ
@@ -158,10 +166,16 @@ type
     function IsLogoReady: Boolean;
     procedure LoadLogoFromPNGFile(const AFileName: string);
 
-    // Переопределенные методы TCustomControl
-    procedure Paint; override;
-    procedure Resize; override;
-    procedure CreateParams(var Params: TCreateParams); override;
+    // НОВЫЕ МЕТОДЫ ДЛЯ ОКНА КАРТИНКИ
+    procedure CreateLogoWindow;
+    procedure DestroyLogoWindow;
+    procedure UpdateLogoWindowPosition;
+    procedure SetLogoWindowVisible(Visible: Boolean);
+
+    // НОВЫЕ МЕТОДЫ ДЛЯ УПРАВЛЕНИЯ РОДИТЕЛЬСКИМ КОНТРОЛОМ
+    procedure SaveOriginalParent;
+    procedure TransferToVideoParent;
+    procedure TransferBackToOriginalParent;
 
   public
     constructor Create(AOwner: TComponent); override;
@@ -207,6 +221,9 @@ type
     function IsLogoVisible: Boolean;
     procedure UpdateLogo; // НОВЫЙ МЕТОД для принудительного обновления
 
+    // НОВЫЙ МЕТОД ДЛЯ ОБНОВЛЕНИЯ LAYOUT
+    procedure UpdateVideoLayout;
+
     // Публичные свойства
     property Handle: HWND read FVideoHandle write FVideoHandle;
     property AutoDetectProtectedStreams: Boolean read FAutoDetectProtectedStreams write FAutoDetectProtectedStreams default True;
@@ -219,7 +236,7 @@ type
     property Muted: Boolean read GetMuted write SetMuted;
     property LogoVisible: Boolean read FLogoVisible write SetLogoVisible;
 
-    // ПРОСТЫЕ МЕТОДЫ ДЛЯ УПРАВЛЕНИЯ STATUS
+    // ПРОСТЫЕ МЕТОДЫ ДЛЯ УПРАВЛЕНИЯ STATUS LABEL
     procedure SetStatusText(const AText: string);
     procedure ClearStatus;
     function GetStatusText: string;
@@ -236,39 +253,6 @@ type
     property Referer: string read FReferer write SetReferer;
     property HttpHeaders: TStringList read FHttpHeaders write SetHttpHeaders;
     property State: TVlcState read FState;
-
-    // Стандартные свойства TCustomControl
-    property Align;
-    property Anchors;
-    property Color;
-    property Constraints;
-    property DragCursor;
-    property DragKind;
-    property DragMode;
-    property Enabled;
-    property Font;
-    property ParentColor;
-    property ParentFont;
-    property ParentShowHint;
-    property PopupMenu;
-    property ShowHint;
-    property TabOrder;
-    property TabStop;
-    property Visible;
-    property OnClick;
-    property OnDblClick;
-    property OnDragDrop;
-    property OnDragOver;
-    property OnEndDrag;
-    property OnEnter;
-    property OnExit;
-    property OnKeyDown;
-    property OnKeyPress;
-    property OnKeyUp;
-    property OnMouseDown;
-    property OnMouseMove;
-    property OnMouseUp;
-    property OnStartDrag;
 
     // События
     property OnLoading: TVlcNotifyEvent read FOnLoading write FOnLoading;
@@ -343,6 +327,9 @@ begin
         // Скрываем статус загрузки
         Player.SetStatusText('');
 
+        // ПЕРЕНОСИМ STATUS LABEL НА ВИДЕО
+        Player.TransferToVideoParent;
+
         Player.SendLoadingEvent('PLAYING');
         Player.SendStateEvent('PLAYING');
         Player.Log('Воспроизведение началось');
@@ -371,6 +358,9 @@ begin
         // Останавливаем таймер перерисовки
         Player.FLogoPaintTimer.Enabled := False;
 
+        // ВОЗВРАЩАЕМ STATUS LABEL ОБРАТНО
+        Player.TransferBackToOriginalParent;
+
         Player.SendLoadingEvent('STOPPED');
         Player.SendStateEvent('STOPPED');
       end;
@@ -380,6 +370,9 @@ begin
         Player.Log('Воспроизведение завершено');
         // Останавливаем таймер перерисовки
         Player.FLogoPaintTimer.Enabled := False;
+
+        // ВОЗВРАЩАЕМ STATUS LABEL ОБРАТНО
+        Player.TransferBackToOriginalParent;
 
         Player.SendLoadingEvent('END_REACHED');
         if Assigned(Player.FOnEndReached) then
@@ -399,6 +392,9 @@ begin
         // Останавливаем таймер перерисовки
         Player.FLogoPaintTimer.Enabled := False;
 
+        // ВОЗВРАЩАЕМ STATUS LABEL ОБРАТНО ПРИ ОШИБКЕ
+        Player.TransferBackToOriginalParent;
+
         Player.SendLoadingEvent('ERROR');
         Player.SendStateEvent('ERROR');
       end;
@@ -410,14 +406,6 @@ end;
 constructor TVlcPlayerEx.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  ControlStyle := ControlStyle + [csOpaque];
-  Width := 640;
-  Height := 480;
-  Color := clBlack;
-  Font.Color := clWhite;
-  Font.Name := 'Arial';
-  Font.Size := 9;
-
   FLibPath := 'libvlc.dll';
   FHttpHeaders := TStringList.Create;
   FAutoPlay := True;
@@ -432,10 +420,12 @@ begin
   FForcedResolution := '';
   FMuted := False;
 
+  FStatusLabel := nil;
+  FStatusWindow := 0;
+  FOriginalParent := nil;
   FLogoVisible := False;
   FLogoBitmap := nil;
-  FStatusVisible := False;
-  FStatusText := '';
+  FLogoWindow := 0;
 
   // Инициализация новых полей для прогресса
   FLoadStartTime := 0;
@@ -469,82 +459,143 @@ begin
   FLogoPaintTimer.Enabled := False;
   FProgressTimer.Enabled := False;
 
+  // Уничтожаем окно картинки
+  DestroyLogoWindow;
+
+  // Уничтожаем окно статуса
+  DestroyStatusLabel;
+
   // Освобождаем ресурсы VLC
   FreeVLC;
+
+  // Освобождаем элементы интерфейса
+  if Assigned(FStatusLabel) then
+  begin
+    FStatusLabel.Free;
+    FStatusLabel := nil;
+  end;
 
   // Освобождаем объекты
   FHttpHeaders.Free;
   FLogoPaintTimer.Free;
   FProgressTimer.Free;
-  DestroyLogoBitmap;
 
   inherited Destroy;
 end;
 
-procedure TVlcPlayerEx.CreateParams(var Params: TCreateParams);
+// МЕТОДЫ ДЛЯ УПРАВЛЕНИЯ STATUS LABEL
+
+procedure TVlcPlayerEx.CreateStatusLabel;
 begin
-  inherited CreateParams(Params);
-  Params.WindowClass.style := Params.WindowClass.style and not (CS_HREDRAW or CS_VREDRAW);
-  Params.Style := Params.Style or WS_CLIPCHILDREN;
-end;
+  if FVideoHandle = 0 then Exit;
 
-procedure TVlcPlayerEx.Paint;
-begin
-  inherited;
-
-  // Очищаем канвас
-  Canvas.Brush.Color := Color;
-  Canvas.FillRect(ClientRect);
-
-  // Рисуем статус если он видим
-  if FStatusVisible and (FStatusText <> '') then
+  // Создаем отдельное окно для статуса поверх VLC
+  if FStatusWindow = 0 then
   begin
-    Canvas.Brush.Style := bsClear;
-    Canvas.Font := Font;
-    Canvas.Font.Color := clWhite;
-    Canvas.Font.Style := [fsBold];
+    FStatusWindow := CreateWindowEx(
+      WS_EX_LAYERED or WS_EX_TRANSPARENT or WS_EX_TOPMOST or WS_EX_NOACTIVATE,
+      'STATIC',
+      PChar(''),
+      WS_POPUP,
+      0, 0, 300, 25,
+      FVideoHandle, 0, HInstance, nil
+    );
 
-    var TextRect := Rect(10, Height - 30, Width - 10, Height - 10);
-    Canvas.TextRect(TextRect, FStatusText, [tfLeft, tfVerticalCenter, tfSingleLine]);
-  end;
-
-  // Рисуем логотип если он видим
-  if FLogoVisible and IsLogoReady then
-  begin
-    DrawLogoOnCanvas;
-  end;
-
-  // Если нет видео, рисуем сообщение
-  if (FState = vlcIdle) or (FState = vlcStopped) then
-  begin
-    Canvas.Brush.Style := bsClear;
-    Canvas.Font.Color := clGray;
-    Canvas.TextOut(Width div 2 - 50, Height div 2, 'VLC Player');
+    if FStatusWindow <> 0 then
+    begin
+      SetLayeredWindowAttributes(FStatusWindow, RGB(0, 0, 0), 180, LWA_ALPHA or LWA_COLORKEY);
+      Log('Окно статуса создано: ' + IntToStr(FStatusWindow));
+    end
+    else
+    begin
+      Log('Ошибка создания окна статуса');
+    end;
   end;
 end;
 
-procedure TVlcPlayerEx.Resize;
+procedure TVlcPlayerEx.DestroyStatusLabel;
 begin
-  inherited;
-
-  // Обновляем handle окна видео при изменении размера
-  if FVideoHandle <> 0 then
+  if FStatusWindow <> 0 then
   begin
-    SetWindowPos(FVideoHandle, HWND_TOP, 0, 0, Width, Height, SWP_NOZORDER);
+    DestroyWindow(FStatusWindow);
+    FStatusWindow := 0;
   end;
-
-  Invalidate; // Перерисовываем компонент
 end;
 
-// МЕТОДЫ ДЛЯ УПРАВЛЕНИЯ STATUS
+procedure TVlcPlayerEx.UpdateStatusLayout;
+var
+  ParentRect: TRect;
+begin
+  if FStatusWindow = 0 then Exit;
+
+  if GetWindowRect(FVideoHandle, ParentRect) then
+  begin
+    SetWindowPos(
+      FStatusWindow, HWND_TOPMOST,
+      ParentRect.Left + 10,
+      ParentRect.Bottom - 35,
+      300, 25,
+      SWP_NOACTIVATE or SWP_SHOWWINDOW
+    );
+    UpdateWindow(FStatusWindow);
+  end;
+end;
+
+// ПРОСТЫЕ ПУБЛИЧНЫЕ МЕТОДЫ ДЛЯ STATUS LABEL
 
 procedure TVlcPlayerEx.SetStatusText(const AText: string);
+var
+  DC: HDC;
+  Rect: TRect;
+  OldFont, NewFont: HGDIOBJ;
 begin
-  if FStatusText <> AText then
+  if FVideoHandle = 0 then Exit;
+
+  // Создаем окно статуса если нужно
+  if FStatusWindow = 0 then
+    CreateStatusLabel;
+
+  if FStatusWindow <> 0 then
   begin
-    FStatusText := AText;
-    FStatusVisible := (AText <> '');
-    Invalidate; // Перерисовываем компонент
+    // Обновляем позицию
+    UpdateStatusLayout;
+
+    // Рисуем текст
+    DC := GetDC(FStatusWindow);
+    try
+      // Очищаем область
+      GetClientRect(FStatusWindow, Rect);
+      FillRect(DC, Rect, GetStockObject(BLACK_BRUSH));
+
+      // Рисуем текст если он есть
+      if AText <> '' then
+      begin
+        SetBkMode(DC, TRANSPARENT);
+        SetTextColor(DC, RGB(255, 255, 255));
+
+        // Создаем шрифт
+        NewFont := CreateFont(16, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET,
+          OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+          DEFAULT_PITCH or FF_DONTCARE, 'Arial');
+        OldFont := SelectObject(DC, NewFont);
+
+        // Рисуем текст
+        DrawText(DC, PChar(AText), -1, Rect, DT_LEFT or DT_VCENTER or DT_SINGLELINE);
+
+        // Восстанавливаем шрифт
+        SelectObject(DC, OldFont);
+        DeleteObject(NewFont);
+      end;
+    finally
+      ReleaseDC(FStatusWindow, DC);
+    end;
+
+    // Показываем/скрываем окно
+    if AText <> '' then
+      ShowWindow(FStatusWindow, SW_SHOWNA)
+    else
+      ShowWindow(FStatusWindow, SW_HIDE);
+
     Log('Статус установлен: ' + AText);
   end;
 end;
@@ -557,22 +608,57 @@ end;
 
 function TVlcPlayerEx.GetStatusText: string;
 begin
-  Result := FStatusText;
+  // Для оконного статуса возвращаем пустую строку
+  // так как текст рисуется непосредственно в окне
+  Result := '';
 end;
 
 procedure TVlcPlayerEx.ShowStatus;
 begin
-  FStatusVisible := True;
-  Invalidate;
+  if FStatusWindow <> 0 then
+    ShowWindow(FStatusWindow, SW_SHOWNA);
 end;
 
 procedure TVlcPlayerEx.HideStatus;
 begin
-  FStatusVisible := False;
-  Invalidate;
+  if FStatusWindow <> 0 then
+    ShowWindow(FStatusWindow, SW_HIDE);
 end;
 
-// МЕТОДЫ ДЛЯ РИСОВАНИЯ КАРТИНКИ НА КАНВАСЕ
+// НОВЫЕ МЕТОДЫ ДЛЯ УПРАВЛЕНИЯ РОДИТЕЛЬСКИМ КОНТРОЛОМ
+
+procedure TVlcPlayerEx.SaveOriginalParent;
+begin
+  // Не используется для оконного статуса
+end;
+
+procedure TVlcPlayerEx.TransferToVideoParent;
+begin
+  // Обновляем позицию статуса поверх видео
+  UpdateStatusLayout;
+  Log('Status Label перенесен на видео');
+end;
+
+procedure TVlcPlayerEx.TransferBackToOriginalParent;
+begin
+  // Скрываем статус при остановке
+  HideStatus;
+  Log('Status Label скрыт');
+end;
+
+// НОВЫЙ МЕТОД ДЛЯ ОБНОВЛЕНИЯ LAYOUT
+procedure TVlcPlayerEx.UpdateVideoLayout;
+begin
+  // Обновляем позицию картинки
+  UpdateLogoWindowPosition;
+
+  // Обновляем позицию статуса
+  UpdateStatusLayout;
+
+  Log('Layout видеоплеера обновлен');
+end;
+
+// МЕТОДЫ ДЛЯ РИСОВАНИЯ КАРТИНКИ НА HANDLE
 
 procedure TVlcPlayerEx.CreateLogoBitmap;
 begin
@@ -595,6 +681,11 @@ begin
   end;
 end;
 
+procedure TVlcPlayerEx.UpdateLogoPosition;
+begin
+  UpdateLogoWindowPosition;
+end;
+
 procedure TVlcPlayerEx.SetLogoVisible(const Value: Boolean);
 begin
   if FLogoVisible <> Value then
@@ -605,7 +696,11 @@ begin
     begin
       if IsLogoReady then
       begin
+        if FLogoWindow = 0 then
+          CreateLogoWindow;
+
         FLogoPaintTimer.Enabled := True;
+        SetLogoWindowVisible(True);
         Log('Картинка показана');
       end
       else
@@ -616,10 +711,9 @@ begin
     else
     begin
       FLogoPaintTimer.Enabled := False;
+      SetLogoWindowVisible(False);
       Log('Картинка скрыта');
     end;
-
-    Invalidate; // Перерисовываем компонент
   end;
 end;
 
@@ -627,7 +721,7 @@ procedure TVlcPlayerEx.LogoPaintTimer(Sender: TObject);
 begin
   if FLogoVisible and IsLogoReady then
   begin
-    Invalidate; // Запускаем перерисовку
+    DrawLogoOnHandle;
   end
   else
   begin
@@ -635,48 +729,65 @@ begin
   end;
 end;
 
-procedure TVlcPlayerEx.DrawLogoOnCanvas;
+procedure TVlcPlayerEx.DrawLogoOnHandle;
 var
-  LogoWidth, LogoHeight: Integer;
-  DestRect: TRect;
+  DC: HDC;
+  BlendFunction: TBlendFunction;
+  LogoDC: HDC;
+  Bitmap: HBITMAP;
+  OldBitmap: HGDIOBJ;
 begin
   if not IsLogoReady then Exit;
 
-  // Рассчитываем размер логотипа (максимум 50x50)
-  var Ratio := Math.Min(50 / FLogoBitmap.Width, 50 / FLogoBitmap.Height);
-  LogoWidth := Round(FLogoBitmap.Width * Ratio);
-  LogoHeight := Round(FLogoBitmap.Height * Ratio);
+  if FLogoWindow = 0 then
+    CreateLogoWindow;
 
-  // Позиционируем в правом верхнем углу
-  DestRect := Rect(Width - LogoWidth - 10, 10, Width - 10, 10 + LogoHeight);
+  if FLogoWindow = 0 then Exit;
 
-  // Рисуем логотип с альфа-смешением
-  var BlendFunction: TBlendFunction;
-  BlendFunction.BlendOp := AC_SRC_OVER;
-  BlendFunction.BlendFlags := 0;
-  BlendFunction.SourceConstantAlpha := 255;
-  BlendFunction.AlphaFormat := AC_SRC_ALPHA;
-
-  // Создаем временный буфер для рисования
-  var TempBitmap := TBitmap.Create;
   try
-    TempBitmap.Width := LogoWidth;
-    TempBitmap.Height := LogoHeight;
-    TempBitmap.PixelFormat := pf32bit;
+    DC := GetDC(FLogoWindow);
+    if DC = 0 then Exit;
 
-    // Копируем и масштабируем изображение
-    TempBitmap.Canvas.StretchDraw(Rect(0, 0, LogoWidth, LogoHeight), FLogoBitmap);
+    try
+      var ClearBrush := CreateSolidBrush(RGB(0, 0, 0));
+      var OldBrush := SelectObject(DC, ClearBrush);
+      PatBlt(DC, 0, 0, 50, 50, PATCOPY);
+      SelectObject(DC, OldBrush);
+      DeleteObject(ClearBrush);
 
-    // Рисуем на основном канвасе
-    Windows.AlphaBlend(
-      Canvas.Handle,
-      DestRect.Left, DestRect.Top, LogoWidth, LogoHeight,
-      TempBitmap.Canvas.Handle,
-      0, 0, LogoWidth, LogoHeight,
-      BlendFunction
-    );
-  finally
-    TempBitmap.Free;
+      LogoDC := CreateCompatibleDC(DC);
+      if LogoDC = 0 then Exit;
+
+      try
+        Bitmap := FLogoBitmap.Handle;
+        OldBitmap := SelectObject(LogoDC, Bitmap);
+
+        BlendFunction.BlendOp := AC_SRC_OVER;
+        BlendFunction.BlendFlags := 0;
+        BlendFunction.SourceConstantAlpha := 255;
+        BlendFunction.AlphaFormat := AC_SRC_ALPHA;
+
+        Windows.AlphaBlend(
+          DC, 0, 0, 50, 50,
+          LogoDC, 0, 0, FLogoBitmap.Width, FLogoBitmap.Height,
+          BlendFunction
+        );
+
+        SelectObject(LogoDC, OldBitmap);
+
+      finally
+        DeleteDC(LogoDC);
+      end;
+
+    finally
+      ReleaseDC(FLogoWindow, DC);
+    end;
+
+  except
+    on E: Exception do
+    begin
+      Log('Ошибка рисования картинки: ' + E.Message);
+    end;
   end;
 end;
 
@@ -684,7 +795,10 @@ procedure TVlcPlayerEx.ForceRedrawLogo;
 begin
   if FLogoVisible and IsLogoReady then
   begin
-    Invalidate;
+    UpdateLogoWindowPosition;
+    DrawLogoOnHandle;
+    if FLogoWindow <> 0 then
+      UpdateWindow(FLogoWindow);
   end;
 end;
 
@@ -692,7 +806,74 @@ procedure TVlcPlayerEx.UpdateLogo;
 begin
   if FLogoVisible and IsLogoReady then
   begin
+    UpdateLogoPosition;
     ForceRedrawLogo;
+  end;
+end;
+
+// МЕТОДЫ ДЛЯ ОКНА КАРТИНКИ
+
+procedure TVlcPlayerEx.CreateLogoWindow;
+begin
+  if FLogoWindow <> 0 then Exit;
+
+  FLogoWindow := CreateWindowEx(
+    WS_EX_LAYERED or WS_EX_TOPMOST or WS_EX_NOACTIVATE,
+    'STATIC', nil, WS_POPUP,
+    0, 0, 50, 50,
+    FVideoHandle, 0, HInstance, nil
+  );
+
+  if FLogoWindow <> 0 then
+  begin
+    SetLayeredWindowAttributes(FLogoWindow, RGB(0, 0, 0), 0, LWA_COLORKEY);
+    Log('Окно для картинки создано: ' + IntToStr(FLogoWindow));
+  end
+  else
+  begin
+    Log('Ошибка создания окна для картинки');
+  end;
+end;
+
+procedure TVlcPlayerEx.DestroyLogoWindow;
+begin
+  if FLogoWindow <> 0 then
+  begin
+    DestroyWindow(FLogoWindow);
+    FLogoWindow := 0;
+  end;
+end;
+
+procedure TVlcPlayerEx.UpdateLogoWindowPosition;
+var
+  ParentRect: TRect;
+begin
+  if (FVideoHandle = 0) or (FLogoWindow = 0) then Exit;
+
+  if not GetWindowRect(FVideoHandle, ParentRect) then Exit;
+
+  SetWindowPos(
+    FLogoWindow, HWND_TOPMOST,
+    ParentRect.Right - 60, ParentRect.Top + 10,
+    50, 50, SWP_NOACTIVATE or SWP_SHOWWINDOW
+  );
+
+  UpdateWindow(FLogoWindow);
+end;
+
+procedure TVlcPlayerEx.SetLogoWindowVisible(Visible: Boolean);
+begin
+  if FLogoWindow = 0 then Exit;
+
+  if Visible then
+  begin
+    UpdateLogoWindowPosition;
+    ShowWindow(FLogoWindow, SW_SHOWNA);
+    DrawLogoOnHandle;
+  end
+  else
+  begin
+    ShowWindow(FLogoWindow, SW_HIDE);
   end;
 end;
 
@@ -701,6 +882,7 @@ end;
 function TVlcPlayerEx.IsLogoReady: Boolean;
 begin
   Result := (FLogoBitmap <> nil) and (not FLogoBitmap.Empty) and
+            (FVideoHandle <> 0) and IsWindow(FVideoHandle) and
             (FLogoBitmap.Width > 0) and (FLogoBitmap.Height > 0);
 end;
 
@@ -749,6 +931,7 @@ begin
     end;
 
     FLogoFileName := AFileName;
+    UpdateLogoPosition;
 
     if FLogoVisible then
     begin
@@ -814,15 +997,17 @@ begin
       end;
 
       FLogoFileName := AFileName;
-
-      if FLogoVisible then
-        ForceRedrawLogo;
+      UpdateLogoPosition;
+      Log('Картинка загружена: ' + AFileName);
 
     except
       on E: Exception do
         Log('Ошибка загрузки картинки: ' + E.Message);
     end;
   end;
+
+  if FLogoVisible then
+    ForceRedrawLogo;
 end;
 
 procedure TVlcPlayerEx.ShowLogo;
@@ -1020,7 +1205,7 @@ var
   EventData: string;
   CopyDataStruct: TCopyDataStruct;
 begin
-  if Handle = 0 then Exit;
+  if FVideoHandle = 0 then Exit;
 
   if AProgress >= 0 then
     EventData := AEvent + '|' + IntToStr(AProgress) + '|' + IntToStr(GetTickCount)
@@ -1031,7 +1216,7 @@ begin
   CopyDataStruct.cbData := (Length(EventData) + 1) * SizeOf(Char);
   CopyDataStruct.lpData := PChar(EventData);
 
-  SendMessage(Handle, WM_COPYDATA, WPARAM(Self.Handle), LPARAM(@CopyDataStruct));
+  SendMessage(FVideoHandle, WM_COPYDATA, WPARAM(Self.Handle), LPARAM(@CopyDataStruct));
 end;
 
 procedure TVlcPlayerEx.SendStateEvent(const AState: string);
@@ -1674,9 +1859,6 @@ begin
   SetStatusText('Подключение... 0%');
 
   try
-    // Используем Handle компонента для вывода видео
-    FVideoHandle := Handle;
-
     if FVideoHandle = 0 then
     begin
       Log('Внимание: Handle окна не установлен!');
@@ -1744,6 +1926,8 @@ begin
     begin
       T_libvlc_media_player_set_hwnd(FPlayer, Pointer(FVideoHandle));
       Log('Handle окна установлен: ' + IntToStr(FVideoHandle));
+
+      UpdateVideoLayout;
     end;
 
     if Assigned(T_libvlc_audio_set_volume) then
