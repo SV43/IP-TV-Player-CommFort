@@ -123,10 +123,8 @@
             <FormType>dfm</FormType>
         </DCCReference>
         <DCCReference Include="dcu\NativeXml.pas"/>
-        <DCCReference Include="dcu\sdStreams.pas"/>
-        <DCCReference Include="dcu\sdDebug.pas"/>
-        <DCCReference Include="dcu\sdStringTable.pas"/>
         <DCCReference Include="dcu\Vlccomponent.pas"/>
+        <DCCReference Include="dcu\VlcVisualComponent.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

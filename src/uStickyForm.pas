@@ -13,7 +13,7 @@ uses
   RegularExpressions, System.Net.HttpClientComponent, System.Math,
   uImageTrackBar, uSettings, FullScreenFormUnit, System.ZLib, System.NetEncoding,
   DateUtils, System.Net.HttpClient, Xml.XMLDoc, xmldom, Xml.XMLIntf, Xml.adomxmldom,
-  NativeXml;
+  NativeXml, VlcVisualComponent, IniFiles;
 type
   TEPGItem = record
     Title: string;
@@ -29,14 +29,14 @@ type
     TVGID: string;
     LogoURL: string;
     StreamURL: string;
-
+    TVGShift: Integer;
+    GroupTitle: string;
     // EPG fields (history)
     CurrentTitle: string;
     CurrentStart: TDateTime;
     CurrentStop: TDateTime;
 
     EPG: TList<TEPGItem>;
-
     constructor Create;
     destructor Destroy; override;
     property CustomAttributes: TStringList read FCustomAttributes write FCustomAttributes;
@@ -62,7 +62,9 @@ type
     Panel_Channels: TPanel;
     Panel_VLC_Player: TPanel;
     PlayerStatus: TTimer;
-    N1231: TMenuItem;
+    FVlc: TVlcPlayer;
+    TimeEpgStatus: TTimer;
+
     procedure C1Click(Sender: TObject);
     procedure sbOpenClick(Sender: TObject);
     procedure sbNextClick(Sender: TObject);
@@ -83,16 +85,17 @@ type
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
     procedure FormShow(Sender: TObject);
     procedure PlayerStatusTimer(Sender: TObject);
-    procedure FormPaint(Sender: TObject);
-    procedure N1231Click(Sender: TObject);
+    procedure TimeEpgStatusTimer(Sender: TObject);
+    procedure sbFullScreenClick(Sender: TObject);
+    procedure FVlcDblClick(Sender: TObject);
   private
     FChannels: TList<TChannelInfo>;
     FLogoMap: TDictionary<string, Integer>; // ключ = LowerCase(LogoURL)
     FParentChanName: WideString;
     FParentChanHandle: HWND;
-    FCacheDir: string;
     FGeneration: Integer;
-    FVlc: TVlcPlayerEx;
+
+
     procedure QueueDownloadLogo(const Channel: TChannelInfo);
     function AddImageFromFileToImageList(const AFileName, AKey: string): Integer;
     function GetLogoIndexForLogoURL(const ALogoURL: string): Integer;
@@ -122,20 +125,29 @@ type
     function ExtractCurrentProgram(const AText: string): string;
     procedure EpgStatus;
 
-
     procedure VlcPlayerStateChanged(Sender: TObject);
+    function CleanChannelName(const DirtyName: string): string;
+    procedure LoadSettings;
+    procedure ParseExistingEPGWithIndex(const XmlFilePath: string; UrlIndex: Integer);
+    procedure ParseExistingEPG(const XmlFilePath: string; UrlIndex: Integer);
   public
     FStopRequested: Boolean;
+     FCacheDir:String;
+     FButtonDir:String;
     property ParentChanName: WideString read FParentChanName write SetParentChanName;
     property ParentChanHandle: HWND read FParentChanHandle write SetParentChanHandle;
     procedure ParseM3U(const FileName: string);
+    procedure FullScreenFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure FullScreenFormDblClick(Sender: TObject);
+    procedure TogglePlayPause;
+    procedure VolumeUp;
+    procedure VolumeDown;
     { Public declarations }
   end;
 
 var
   frmStickyForm: TfrmStickyForm;
   ImageList: TImageList;
-  FButtonDir: string;
   IsFullScreen: Boolean;
   FEpgUrls: TStringList;
   FEPGTimer: TTimer;
@@ -152,6 +164,7 @@ procedure TfrmStickyForm.VlcPlayerStateChanged(Sender: TObject);
 begin
 
 end;
+
 
 constructor TChannelInfo.Create;
 begin
@@ -250,6 +263,7 @@ begin
   end;
 end;
 
+
 procedure TfrmStickyForm.PlayChannelByIndex(AIndex: Integer);
 var
   Channel: TChannelInfo;
@@ -263,6 +277,8 @@ begin
   WriteDebugLog('--- Воспроизведение канала: ' + Channel.Name + ' ---');
   WriteDebugLog('URL: ' + Channel.StreamURL);
 
+
+
   if Channel.StreamURL = '' then
     Exit;
 
@@ -270,7 +286,9 @@ begin
 
     // 🔹 Запускаем поток
     WriteDebugLog('Запуск потока...');
-    Fvlc.LoadMedia(Channel.StreamURL);
+    FVlc.LoadMedia(Channel.StreamURL);
+    PlayerStatus.Enabled := Enabled;
+    FVlc.Play;
 
   except
     on E: Exception do
@@ -309,12 +327,19 @@ procedure TfrmStickyForm.ImageTrackBar1Change(Sender: TObject);
 begin
 
   FVlc.Volume := tvVolume.Position;
-
+  FVlc.SetDisplayText('Громкость ' + IntToStr(tvVolume.Position) + '%');
+  FVlc.ShowTopImage := False;
  if FVlc.IsMuted then
   begin
     LoadPNGToControl(FButtonDir + 'volume.png', sbVolume);
     FVlc.Unmute;
   end;
+  if tvVolume.Position = 0 then
+  begin
+     FVlc.ShowTopImage := True;
+     LoadPNGToControl(FButtonDir + 'volume-mute.png', sbVolume);
+  end;
+
 end;
 
 function TfrmStickyForm.IsValidPNG(const MS: TMemoryStream): Boolean;
@@ -416,7 +441,7 @@ begin
       if imgIndex >= 0 then
         FLogoMap.AddOrSetValue(Channel.TVGID, imgIndex);
 
-      idx := lbChannels.Items.IndexOf(Channel.Name);
+      idx := lbChannels.Items.IndexOf(Channel.Name + ' ' + Channel.GroupTitle);
       if idx >= 0 then
       begin
         lbChannels.Items.Objects[idx] := TObject(NativeInt(imgIndex));
@@ -581,6 +606,69 @@ begin
     end).Start;
 end;
 
+function TfrmStickyForm.CleanChannelName(const DirtyName: string): string;
+var
+  CleanName: string;
+  i: Integer;
+begin
+  CleanName := Trim(DirtyName);
+
+  // Убираем все, что похоже на атрибуты (tvg-id=, group-title= и т.д.)
+  if Pos('tvg-id=', CleanName) > 0 then
+    CleanName := Copy(CleanName, 1, Pos('tvg-id=', CleanName) - 1);
+
+  if Pos('group-title=', CleanName) > 0 then
+    CleanName := Copy(CleanName, 1, Pos('group-title=', CleanName) - 1);
+
+  if Pos('tvg-logo=', CleanName) > 0 then
+    CleanName := Copy(CleanName, 1, Pos('tvg-logo=', CleanName) - 1);
+
+  if Pos('tvg-shift=', CleanName) > 0 then
+    CleanName := Copy(CleanName, 1, Pos('tvg-shift=', CleanName) - 1);
+
+  // Убираем двойные пробелы и пробелы в начале/конце
+  CleanName := Trim(CleanName);
+
+  // Убираем возможные оставшиеся кавычки
+  CleanName := StringReplace(CleanName, '"', '', [rfReplaceAll]);
+
+  WriteDebugLog('Очистка названия: "' + DirtyName + '" -> "' + CleanName + '"');
+
+  Result := CleanName;
+end;
+
+procedure TfrmStickyForm.ParseExistingEPG(const XmlFilePath: string; UrlIndex: Integer);
+var
+  MS: TMemoryStream;
+begin
+  WriteDebugLog('ParseExistingEPG: ' + XmlFilePath + ', индекс: ' + IntToStr(UrlIndex));
+
+  if not FileExists(XmlFilePath) then
+  begin
+    WriteDebugLog('Файл не существует: ' + XmlFilePath);
+    Exit;
+  end;
+
+  MS := TMemoryStream.Create;
+  try
+    try
+      MS.LoadFromFile(XmlFilePath);
+      ParseEPGStream(MS);
+      WriteDebugLog('Успешно распарсен существующий EPG: ' + XmlFilePath);
+    except
+      on E: Exception do
+      begin
+        WriteDebugLog('Ошибка парсинга существующего EPG: ' + E.Message);
+        // Если парсинг существующего файла не удался, скачиваем заново
+        WriteDebugLog('Пробуем скачать EPG заново: ' + FEpgUrls[UrlIndex]);
+        DownloadAndParseEPG(FEpgUrls[UrlIndex]);
+      end;
+    end;
+  finally
+    MS.Free;
+  end;
+end;
+
 
 procedure TfrmStickyForm.ParseM3U(const FileName: string);
 var
@@ -593,6 +681,9 @@ var
   Regex: TRegEx;
   Match: TMatch;
   Key, Value: string;
+  GroupTitle: string;
+  HasGroupTitle: Boolean;
+  TempGroup: string;
 begin
   Inc(FGeneration);
   FLogoMap.Clear;
@@ -627,6 +718,7 @@ begin
       end;
 
       i := 0;
+      GroupTitle := '';
       while i < SL.Count do
       begin
         Line := Trim(SL[i]);
@@ -638,10 +730,22 @@ begin
           Continue;
         end;
 
+        // --------------------------
+        // Обрабатываем #EXTGRP - группу каналов
+        // --------------------------
+        if Line.StartsWith('#EXTGRP:', True) then
+        begin
+          GroupTitle := Trim(Copy(Line, 9, MaxInt));
+          WriteDebugLog('Найдена группа #EXTGRP: ' + GroupTitle);
+          Inc(i);
+          Continue;
+        end;
+
         // пропускаем все теги кроме #EXTINF и #EXTVLCOPT
         if Line.StartsWith('#', True)
           and not Line.StartsWith('#EXTINF', True)
-          and not Line.StartsWith('#EXTVLCOPT', True) then
+          and not Line.StartsWith('#EXTVLCOPT', True)
+          and not Line.StartsWith('#EXTGRP', True) then
         begin
           Inc(i);
           Continue;
@@ -656,24 +760,46 @@ begin
           Attrs.StrictDelimiter := True;
           VLCOpts := TStringList.Create;
           VLCOpts.StrictDelimiter := True;
+          HasGroupTitle := False;
           try
-            // извлекаем tvg-id, tvg-logo и т.д.
-            Regex := TRegEx.Create('([\w-]+)\s*=\s*(?:"([^"]*)"|(\S+))', [roIgnoreCase]);
+            // ИСПРАВЛЕННОЕ регулярное выражение для кириллицы
+            Regex := TRegEx.Create('([\w-]+)\s*=\s*("([^"]*)"|([^,\s]+))', [roIgnoreCase]);
             Match := Regex.Match(Line);
             while Match.Success do
             begin
-              if Match.Groups[2].Value <> '' then
-                Attrs.Values[Match.Groups[1].Value] := Match.Groups[2].Value
+              Key := Match.Groups[1].Value;
+              // Группа 3 - значение в кавычках, группа 4 - значение без кавычек
+              if Match.Groups[3].Value <> '' then
+                Value := Match.Groups[3].Value
               else
-                Attrs.Values[Match.Groups[1].Value] := Match.Groups[3].Value;
+                Value := Match.Groups[4].Value;
+
+              Attrs.Values[Key] := Value;
+              WriteDebugLog('Атрибут: ' + Key + ' = ' + Value);
+
               Match := Match.NextMatch;
             end;
 
-            // имя канала после запятой
+            // имя канала после запятой - ОЧИЩАЕМ ОТ МУСОРА
             if Pos(',', Line) > 0 then
-              Name := Trim(Copy(Line, Pos(',', Line) + 1, MaxInt))
+            begin
+              Name := Trim(Copy(Line, Pos(',', Line) + 1, MaxInt));
+
+              // Убираем все атрибуты и мусор из названия
+              // Ищем позицию первого пробела или конца строки после названия
+              Name := CleanChannelName(Name);
+
+              WriteDebugLog('Очищенное название канала: ' + Name);
+            end
             else
               Name := '';
+
+            // проверяем наличие group-title в #EXTINF
+            TempGroup := Attrs.Values['group-title'];
+            WriteDebugLog('Group-title из атрибутов: ' + TempGroup);
+            WriteDebugLog('Group-title из #EXTGRP: ' + GroupTitle);
+
+            // УДАЛЕН БЛОК ПРОПУСКА КАНАЛА - ВСЕГДА СОЗДАЕМ КАНАЛ
 
             // читаем все #EXTVLCOPT перед URL
             Inc(i);
@@ -696,12 +822,14 @@ begin
             end;
 
             // ищем URL потока
-            StreamURL := '';
+            StreamURL := 'null';
             while (i < SL.Count) and ((Trim(SL[i]) = '') or SL[i].Trim.StartsWith('#', True)) do
               Inc(i);
 
             if i < SL.Count then
-              StreamURL := Trim(SL[i]);
+              StreamURL := Trim(SL[i])
+            else
+              StreamURL := 'null';
 
             // создаем канал
             Info := TChannelInfo.Create;
@@ -712,12 +840,34 @@ begin
             Info.CurrentTitle := '';
             Info.CurrentStart := 0;
             Info.CurrentStop := 0;
+            Info.TVGShift := StrToIntDef(Attrs.Values['tvg-shift'], 0);
+
+            // определяем группу: приоритет у group-title из #EXTINF, затем #EXTGRP
+            if TempGroup <> '' then
+            begin
+              Info.GroupTitle := TempGroup;
+              WriteDebugLog('Использован group-title: ' + TempGroup);
+            end
+            else if GroupTitle <> '' then
+            begin
+              Info.GroupTitle := GroupTitle;
+              WriteDebugLog('Использован #EXTGRP: ' + GroupTitle);
+            end
+            else
+            begin
+              Info.GroupTitle := ''; // Пустое поле, если нет ни group-title, ни #EXTGRP
+              WriteDebugLog('Group-title не найден, установлено пустое поле');
+            end;
 
             // сохраняем все параметры
             Info.CustomAttributes.Assign(VLCOpts);
 
-            WriteDebugLog('Добавлен канал: ' + Info.Name + ' (' + Info.StreamURL + ')');
-            WriteDebugLog('  VLCOpts.Count = ' + IntToStr(VLCOpts.Count));
+            WriteDebugLog('Добавлен канал: ' + Info.Name);
+            WriteDebugLog('  URL: ' + Info.StreamURL);
+            WriteDebugLog('  Группа: ' + Info.GroupTitle);
+            WriteDebugLog('  TVG-ID: ' + Info.TVGID);
+            WriteDebugLog('  Лого: ' + Info.LogoURL);
+            WriteDebugLog('  Сдвиг: ' + IntToStr(Info.TVGShift));
 
             if VLCOpts.Count > 0 then
               WriteDebugLog('  Опции VLC: ' + VLCOpts.Text);
@@ -747,7 +897,12 @@ begin
     FEPGTimer.Enabled := frmSettings.cbJTV.Checked;
 end;
 
-
+function IsFullScreenMode: Boolean;
+begin
+  Result := (Screen.ActiveForm <> nil) and
+            (Screen.ActiveForm.WindowState = wsMaximized) and
+            (Screen.ActiveForm.BorderStyle = bsNone);
+end;
 
 function TfrmStickyForm.GetLogoIndexForLogoURL(const ALogoURL: string): Integer;
 var
@@ -806,45 +961,121 @@ end;
 
 procedure TfrmStickyForm.EpgStatus;
 var
-  idx: Integer;
-  cur: string;
-
+  i, j: Integer;
   ch: TChannelInfo;
+  currentUrl: string;
   timeRange: string;
+  cur: string;
+  nowDT: TDateTime;
+  epgStartDT, epgStopDT: TDateTime;
+  foundCurrent: Boolean;
 begin
-
   if not FVlc.IsPlaying then
     Exit;
 
-  idx := lbChannels.ItemIndex;
-  if (idx < 0) or (idx >= FChannels.Count) then
-    Exit;
+  // Получаем текущий URL воспроизведения
+  currentUrl := FVlc.GetCurrentMediaURL;
+  if currentUrl = '' then
+    currentUrl := FVlc.MediaURL;
 
-  ch := FChannels[idx];
-  if not Assigned(ch) then
-    Exit;
-
-  cur := Trim(ch.CurrentTitle);
-
-  if cur = '' then
-    cur := 'Нет актуальных данных'
-  else
+  // Ищем канал с этим URL
+  ch := nil;
+  for i := 0 to FChannels.Count - 1 do
   begin
-    var p := Pos('(', cur);
-    if p > 0 then
-      cur := Trim(Copy(cur, 1, p - 1));
+    if (FChannels[i].StreamURL = currentUrl) then
+    begin
+      ch := FChannels[i];
+      Break;
+    end;
   end;
 
+  if not Assigned(ch) then
+  begin
+    OutputDebugString(PChar('Канал не найден для URL: ' + currentUrl));
+    Exit;
+  end;
 
- timeRange := FormatDateTime('hh:nn', ch.CurrentStart) + ' - ' +
-               FormatDateTime('hh:nn', ch.CurrentStop);
+  // ПРАВИЛЬНО: Ищем текущую программу с учетом TVGShift
+  nowDT := Now;
+  foundCurrent := False;
+  cur := 'Нет актуальных данных';
+  timeRange := '';
 
-  FVlc.SetStatusText(Format('Сейчас на %s: %s (%s)',
-    [ch.Name, cur, timeRange]));
+  if Assigned(ch.EPG) then
+  begin
+    for j := 0 to ch.EPG.Count - 1 do
+    begin
+      // Применяем смещение к временам EPG программ
+      epgStartDT := IncHour(ch.EPG[j].StartDT, ch.TVGShift);
+      epgStopDT := IncHour(ch.EPG[j].StopDT, ch.TVGShift);
 
+      // Ищем по реальному текущему времени
+      if (epgStartDT <= nowDT) and (epgStopDT > nowDT) then
+      begin
+        cur := ch.EPG[j].Title;
+        // Формируем диапазон времени из СДВИНУТЫХ времен
+        timeRange := FormatDateTime('hh:nn', epgStartDT) + ' - ' +
+                     FormatDateTime('hh:nn', epgStopDT);
+        foundCurrent := True;
+
+        // Обновляем информацию о текущей программе в канале
+        ch.CurrentTitle := cur;
+        ch.CurrentStart := epgStartDT;
+        ch.CurrentStop := epgStopDT;
+        Break;
+      end;
+    end;
+  end;
+
+  // Если не нашли текущую программу
+  if not foundCurrent then
+  begin
+    ch.CurrentTitle := '';
+    ch.CurrentStart := 0;
+    ch.CurrentStop := 0;
+  end;
+
+  // Очищаем название от времени в скобках (если оно там есть)
+  var cleanTitle := cur;
+  var p := Pos('(', cleanTitle);
+  if p > 0 then
+    cleanTitle := Trim(Copy(cleanTitle, 1, p - 1));
+
+  // Формируем текст для отображения
+  var displayText: string;
+  if foundCurrent then
+  begin
+    if ch.TVGShift <> 0 then
+    begin
+      var shiftText := Format('%s%d ч',
+        [IfThen(ch.TVGShift > 0, '+', ''), ch.TVGShift]);
+      displayText := Format('%s: %s (%s) [сдвиг %s]',
+        [ch.Name, cleanTitle, timeRange, shiftText]);
+    end
+    else
+    begin
+      displayText := Format('%s: %s (%s)',
+        [ch.Name, cleanTitle, timeRange]);
+    end;
+  end
+  else
+  begin
+    if ch.TVGShift <> 0 then
+    begin
+      var shiftText := Format('%s%d ч',
+        [IfThen(ch.TVGShift > 0, '+', ''), ch.TVGShift]);
+      displayText := Format('%s: %s [сдвиг %s]',
+        [ch.Name, cleanTitle, shiftText]);
+    end
+    else
+    begin
+      displayText := Format('%s: %s',
+        [ch.Name, cleanTitle]);
+    end;
+  end;
+
+  FVlc.SetDisplayText(displayText);
 end;
-
-
 
 
 procedure TfrmStickyForm.OnPlaying(Sender: TObject);
@@ -856,22 +1087,15 @@ procedure TfrmStickyForm.OnBuffering(Sender: TObject; cache: Single);
 begin
   if Trunc(cache) < 100 then
   else
-    FVlc.SetStatusText('');
     EpgStatus;
 end;
 
 procedure TfrmStickyForm.OnError(Sender: TObject);
 begin
-  FVlc.SetStatusText('');
   LoadPNGToControl(FButtonDir + 'play.png', sbPlay);
 end;
 
 
-
-procedure TfrmStickyForm.N1231Click(Sender: TObject);
-begin
-  FVlc.SetStatusText('Канал: Первый | Время: 20:30 | Название: Новости');
-end;
 
 procedure TfrmStickyForm.N1Click(Sender: TObject);
 begin
@@ -879,11 +1103,23 @@ begin
   GetChannels;
 end;
 
+procedure TfrmStickyForm.LoadSettings;
+var
+  Ini: TIniFile;
+begin
+  Ini := TIniFile.Create(path + 'IPTV_Plugin\IPTV_Plug.ini');
+  try
+    tvVolume.Position := Ini.ReadInteger('IPTV-Player', 'Volume', 100);
+  finally
+    Ini.Free;
+  end;
+end;
+
 
 procedure TfrmStickyForm.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
 begin
   FStopRequested := True;
-  FVlc.Free;
+  Save;
 end;
 
 procedure TfrmStickyForm.FormCreate(Sender: TObject);
@@ -891,7 +1127,6 @@ var
   NoLogoPath: string;
 begin
   Randomize;
-
   FChannels := TList<TChannelInfo>.Create;
   FLogoMap := TDictionary<string, Integer>.Create;
   FGeneration := 0;
@@ -931,10 +1166,13 @@ begin
     AddImageFromFileToImageList(NoLogoPath, 'NoLogo');
 
 
-  FVlc := TVlcPlayerEx.Create(Self);
+
+
   // Сначала путь к библиотеке
   FVlc.LibPath := frmSettings.dePachVLC.Text;
-  FVlc.SetStatusText('');
+  FVlc.ShowTopImage := False;
+  LoadSettings;
+  FVlc.EnableMouseEvents;
 end;
 
 
@@ -955,21 +1193,15 @@ begin
   // cleanup timers if any
   FreeAndNil(FEPGTimer);
   FreeAndNil(FEPGStartTimer);
-end;
-
-procedure TfrmStickyForm.FormPaint(Sender: TObject);
-begin
-  FVlc.UpdateLogo;
+  FreeAndNil(FullScreenForm);
 end;
 
 procedure TfrmStickyForm.FormShow(Sender: TObject);
 begin
-  // Окно вывода
-  FVlc.Handle := Panel_VLC_Player.Handle;
-
-
   lbChannels.Style := lbOwnerDrawFixed;
-  lbChannels.ItemHeight := Max(ilLogos.Height + 4, 48);
+  lbChannels.ItemHeight := Max(ilLogos.Height + 4, 80);
+
+
 
   FCacheDir  := frmSettings.lePachStyle.Text + 'logo-channels\';
   FButtonDir := frmSettings.lePachStyle.Text + 'image-button\';
@@ -999,7 +1231,19 @@ begin
 
     tvVolume.TrackFile := FButtonDir + 'track.png';
     tvVolume.ThumbFile := FButtonDir + 'thumb-48.png';
+
+    if tvVolume.Position = 0 then
+       LoadPNGToControl(FButtonDir + 'volume-mute.png', sbVolume) else
+       LoadPNGToControl(FButtonDir + 'volume.png', sbVolume);
+
+    FVlc.TopImage.LoadFromFile(FButtonDir + 'volume-mute-player.png');
   end;
+    FVlc.Unmute;
+end;
+
+procedure TfrmStickyForm.FVlcDblClick(Sender: TObject);
+begin
+  sbFullScreenClick(self);
 end;
 
 procedure TfrmStickyForm.EPGTimerHandler(Sender: TObject);
@@ -1031,21 +1275,44 @@ end;
 
 
 
-procedure TfrmStickyForm.PlayerStatusTimer(Sender: TObject);
+procedure TfrmStickyForm.TimeEpgStatusTimer(Sender: TObject);
 begin
-  FVlc.SetStatusText(FVlc.GetPlayerStatus);
+  if FVlc.IsPlaying then
+   EpgStatus else
+   FVlc.SetDisplayText('');
+end;
+
+procedure TfrmStickyForm.PlayerStatusTimer(Sender: TObject);
+var
+  CurrentProgress: Integer;
+begin
+  if FVlc.IsLoading then
+  begin
+    CurrentProgress := FVlc.GetActualLoadingProgress;
+
+    // Обновляем UI
+
+    FVlc.SetDisplayText(Format('Состояние: %s',
+      [FVLC.GetPlayerStatus]));
+
+
+
+  if FVlc.IsPlaying then
+    PlayerStatus.Enabled := false
+  end;
+
 end;
 
 procedure TfrmStickyForm.C1Click(Sender: TObject);
 begin
-  if lbChannels.Visible = True then
+  if Panel_Channels.Visible = True then
   begin
-    lbChannels.Visible := False;
+    Panel_Channels.Visible := False;
     Splitter.Visible := False;
   end
   else
   begin
-    lbChannels.Visible := True;
+    Panel_Channels.Visible := True;
     Splitter.Visible := True;
   end;
 end;
@@ -1081,97 +1348,168 @@ var
   nowDT: TDateTime;
   currEPG, nextEPG: TEPGItem;
   hasCurr: Boolean;
+  logoTop: Integer;
+  textColor, grayTextColor: TColor;
+  shiftText: string;
+  epgStartDT, epgStopDT: TDateTime;
 begin
   if (Index < 0) or (Index >= FChannels.Count) then Exit;
 
   ch := FChannels[Index];
 
-  // фон при выделении/обычный
+  // Определяем цвета текста
   if odSelected in State then
-    lbChannels.Canvas.Brush.Color := clHighlight
+  begin
+    lbChannels.Canvas.Brush.Color := clHighlight;
+    textColor := clHighlightText;
+    grayTextColor := clSilver;
+  end
   else
+  begin
     lbChannels.Canvas.Brush.Color := lbChannels.Color;
+    textColor := clWindowText;
+    grayTextColor := clGrayText;
+  end;
 
   lbChannels.Canvas.FillRect(Rect);
 
-
+  // Поиск логотипа (оставляем без изменений)
   logoIdx := -1;
-
-  // 1) сначала пробуем взять индекс из Objects
   if lbChannels.Items.Objects[Index] <> nil then
     logoIdx := Integer(NativeInt(lbChannels.Items.Objects[Index]));
 
-  // 2) если не нашли → пробуем по карте по ключу TVGID
   if (logoIdx < 0) and (ch.TVGID <> '') then
     if not FLogoMap.TryGetValue(ch.TVGID, logoIdx) then
       logoIdx := -1;
 
-  // 3) если ничего не нашли → ставим NoLogo
   if logoIdx < 0 then
     if not FLogoMap.TryGetValue('NoLogo', logoIdx) then
       logoIdx := -1;
 
-  // рисуем логотип если нашли
+  // Центрируем логотип
+  logoTop := Rect.Top + (Rect.Bottom - Rect.Top - ilLogos.Height) div 2;
+  if logoTop < Rect.Top + 2 then
+    logoTop := Rect.Top + 2;
+
   if logoIdx >= 0 then
-    ilLogos.Draw(lbChannels.Canvas, Rect.Left + 2, Rect.Top + 2, logoIdx);
+    ilLogos.Draw(lbChannels.Canvas, Rect.Left + 4, logoTop, logoIdx);
 
   nameLeft := Rect.Left + ilLogos.Width + 8;
+  oldFontSize := lbChannels.Canvas.Font.Size;
 
-
-  lbChannels.Canvas.Font.Color := clWindowText;
+  // Название канала
+  lbChannels.Canvas.Font.Color := textColor;
   lbChannels.Canvas.Font.Style := [fsBold];
-  lbChannels.Canvas.TextOut(nameLeft, Rect.Top + 4, ch.Name);
+  lbChannels.Canvas.TextOut(nameLeft, Rect.Top + 6, ch.Name);
 
+  // Группа канала
+  lbChannels.Canvas.Font.Size := oldFontSize - 1;
+  lbChannels.Canvas.Font.Style := [];
+  lbChannels.Canvas.Font.Color := grayTextColor;
 
+  if ch.GroupTitle <> '' then
+    lbChannels.Canvas.TextOut(nameLeft, Rect.Top + 24, 'Группа: ' + ch.GroupTitle)
+  else
+    lbChannels.Canvas.TextOut(nameLeft, Rect.Top + 24, 'Группа: не указана');
+
+  // Восстанавливаем размер шрифта
+  lbChannels.Canvas.Font.Size := oldFontSize;
+
+  // ПРАВИЛЬНАЯ обработка EPG с учетом TVGShift
   hasCurr := False;
-  nowDT := Now;
-  FillChar(currEPG, SizeOf(currEPG), 0);
-  FillChar(nextEPG, SizeOf(nextEPG), 0);
+  nowDT := Now; // Текущее реальное время
+
+  // Форматируем текст сдвига
+  if ch.TVGShift <> 0 then
+  begin
+    if ch.TVGShift > 0 then
+      shiftText := Format('+%d ч', [ch.TVGShift])
+    else
+      shiftText := Format('%d ч', [ch.TVGShift]);
+  end
+  else
+    shiftText := '';
+
+  currEPG := Default(TEPGItem);
+  nextEPG := Default(TEPGItem);
 
   if Assigned(ch.EPG) then
   begin
     for i := 0 to ch.EPG.Count - 1 do
     begin
-      if (ch.EPG[i].StartDT <= nowDT) and (ch.EPG[i].StopDT > nowDT) then
+      // ПРАВИЛЬНО: сдвигаем времена EPG программ, а не текущее время
+      epgStartDT := IncHour(ch.EPG[i].StartDT, ch.TVGShift);
+      epgStopDT := IncHour(ch.EPG[i].StopDT, ch.TVGShift);
+
+      // Ищем программу по реальному текущему времени
+      if (epgStartDT <= nowDT) and (epgStopDT > nowDT) then
       begin
         currEPG := ch.EPG[i];
-        if i+1 < ch.EPG.Count then
-          nextEPG := ch.EPG[i+1];
+        // Для отображения используем сдвинутые времена
+        currEPG.StartDT := epgStartDT;
+        currEPG.StopDT := epgStopDT;
+
+        if i + 1 < ch.EPG.Count then
+        begin
+          nextEPG := ch.EPG[i + 1];
+          // Сдвигаем и следующую программу для отображения
+          nextEPG.StartDT := IncHour(nextEPG.StartDT, ch.TVGShift);
+          nextEPG.StopDT := IncHour(nextEPG.StopDT, ch.TVGShift);
+        end;
+
         hasCurr := True;
         Break;
       end;
     end;
   end;
 
-  oldFontSize := lbChannels.Canvas.Font.Size;
-  lbChannels.Canvas.Font.Size := oldFontSize - 2;
+  // Уменьшаем шрифт для EPG
+  lbChannels.Canvas.Font.Size := oldFontSize - 1;
   lbChannels.Canvas.Font.Style := [];
-  lbChannels.Canvas.Font.Color := clGrayText;
+  lbChannels.Canvas.Font.Color := grayTextColor;
 
   R := Rect;
-  R.Top := Rect.Top + 20;
+  R.Top := Rect.Top + 42;
 
   if hasCurr then
   begin
-    lbChannels.Canvas.TextOut(nameLeft, R.Top,
-      Format('%s (%s-%s)', [
-        currEPG.Title,
-        FormatDateTime('hh:nn', currEPG.StartDT),
-        FormatDateTime('hh:nn', currEPG.StopDT)
-      ]));
+    // Отображаем сдвинутые времена
+    if ch.TVGShift <> 0 then
+    begin
+      lbChannels.Canvas.TextOut(nameLeft, R.Top,
+        Format('%s (%s-%s) [сдвиг %s]', [
+          currEPG.Title,
+          FormatDateTime('hh:nn', currEPG.StartDT),  // Уже сдвинутое время
+          FormatDateTime('hh:nn', currEPG.StopDT),   // Уже сдвинутое время
+          shiftText
+        ]));
+    end
+    else
+    begin
+      lbChannels.Canvas.TextOut(nameLeft, R.Top,
+        Format('%s (%s-%s)', [
+          currEPG.Title,
+          FormatDateTime('hh:nn', currEPG.StartDT),
+          FormatDateTime('hh:nn', currEPG.StopDT)
+        ]));
+    end;
 
-    if nextEPG.Title <> '' then
+    if (nextEPG.Title <> '') and (R.Top + 32 <= Rect.Bottom) then
       lbChannels.Canvas.TextOut(nameLeft, R.Top + 16,
-        'Следом: ' + nextEPG.Title);
-
+        Format('Следом: %s (%s)', [nextEPG.Title, FormatDateTime('hh:nn', nextEPG.StartDT)]));
   end
   else
-    lbChannels.Canvas.TextOut(nameLeft, R.Top, 'Нет актуальных данных');
+  begin
+    if ch.TVGShift <> 0 then
+      lbChannels.Canvas.TextOut(nameLeft, R.Top,
+        Format('Нет актуальных данных [сдвиг %s]', [shiftText]))
+    else
+      lbChannels.Canvas.TextOut(nameLeft, R.Top, 'Нет актуальных данных');
+  end;
 
-    lbChannels.Canvas.Font.Size := oldFontSize;
+  // Восстанавливаем размер шрифта
+  lbChannels.Canvas.Font.Size := oldFontSize;
 end;
-
-
 
 
 procedure TfrmStickyForm.LoadEPGUrlsFromM3ULine(const Line: string);
@@ -1211,9 +1549,43 @@ begin
   end;
 end;
 
+procedure TfrmStickyForm.ParseExistingEPGWithIndex(const XmlFilePath: string; UrlIndex: Integer);
+var
+  MS: TMemoryStream;
+begin
+  WriteDebugLog('ParseExistingEPGWithIndex: ' + XmlFilePath);
+
+  if not FileExists(XmlFilePath) then
+  begin
+    WriteDebugLog('Файл не существует: ' + XmlFilePath);
+    Exit;
+  end;
+
+  MS := TMemoryStream.Create;
+  try
+    try
+      MS.LoadFromFile(XmlFilePath);
+      ParseEPGStream(MS);
+      WriteDebugLog('Успешно распарсен существующий EPG: ' + XmlFilePath);
+    except
+      on E: Exception do
+      begin
+        WriteDebugLog('Ошибка парсинга существующего EPG: ' + E.Message);
+        // Если парсинг существующего файла не удался, скачиваем заново
+        WriteDebugLog('Пробуем скачать EPG заново: ' + FEpgUrls[UrlIndex]);
+        DownloadAndParseEPG(FEpgUrls[UrlIndex]);
+      end;
+    end;
+  finally
+    MS.Free;
+  end;
+end;
+
 procedure TfrmStickyForm.DownloadAndParseAllEPG;
 var
   i, total: Integer;
+  FilePath, XmlPath: string;
+  FileAgeHours: Double;
 begin
   WriteDebugLog('Запуск DownloadAndParseAllEPG');
   ClearCurrentPrograms;
@@ -1234,8 +1606,40 @@ begin
     end;
 
     try
+      // Проверяем возраст существующего файла EPG
+      FilePath := IncludeTrailingPathDelimiter(frmSettings.lePachStyle.Text) + 'epg\' +
+                  StringReplace(FEpgUrls[i], 'https://', '', [rfIgnoreCase]);
+      FilePath := StringReplace(FilePath, 'http://', '', [rfIgnoreCase]);
+      FilePath := StringReplace(FilePath, '/', PathDelim, [rfReplaceAll]);
+
+      XmlPath := ChangeFileExt(FilePath, '.xml');
+
+      // Если файл существует и ему меньше 24 часов - парсим существующий
+      if FileExists(XmlPath) then
+      begin
+        FileAgeHours := (Now - FileDateToDateTime(FileAge(XmlPath))) * 24;
+        WriteDebugLog('Файл EPG существует: ' + XmlPath + ', возраст: ' +
+                      FormatFloat('0.00', FileAgeHours) + ' часов');
+
+        if FileAgeHours < 24 then
+        begin
+          WriteDebugLog('Файл моложе 24 часов, парсим существующий: ' + XmlPath);
+          ParseExistingEPG(XmlPath, i); // Передаем индекс i
+          Continue; // Переходим к следующему URL
+        end
+        else
+        begin
+          WriteDebugLog('Файл старше 24 часов, скачиваем заново: ' + FEpgUrls[i]);
+        end;
+      end
+      else
+      begin
+        WriteDebugLog('Файл EPG не существует, скачиваем: ' + FEpgUrls[i]);
+      end;
+
       WriteDebugLog('Загрузка EPG: ' + FEpgUrls[i]);
       DownloadAndParseEPG(FEpgUrls[i]);
+
     except
       on E: Exception do
       begin
@@ -1306,7 +1710,6 @@ begin
 
   XmlPath := ChangeFileExt(FilePath, '.xml');
 
-
   HttpClient := TNetHTTPClient.Create(nil);
   try
     HttpClient.UserAgent := 'Mozilla/5.0';
@@ -1329,6 +1732,8 @@ begin
           try
             DecompressGZip(FilePath, XmlPath);
             WriteDebugLog('EPG распакован: ' + XmlPath);
+            // Удаляем временный gz файл после распаковки
+            DeleteFile(FilePath);
           except
             on E: Exception do
             begin
@@ -1357,10 +1762,10 @@ begin
   finally
     HttpClient.Free;
   end;
-  if not FStopRequested then
-  EpgStatus;
-end;
 
+  if not FStopRequested then
+    EpgStatus;
+end;
 
 
 
@@ -1590,6 +1995,12 @@ begin
     ParseM3U(odFile.FileName);
     frmSettings.edURLM3U.Text := odFile.FileName;
     Save;
+  // use anonymous thread for periodic EPG refresh (safer in DLL)
+  TThread.CreateAnonymousThread(
+    procedure
+    begin
+      DownloadAndParseAllEPG;
+    end).Start;
   end;
 end;
 
@@ -1637,6 +2048,173 @@ begin
   PlayChannelByIndex(idx);
 end;
 
+
+procedure TfrmStickyForm.FullScreenFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+begin
+  case Key of
+    VK_ESCAPE:
+      (Sender as TForm).ModalResult := mrCancel; // Выход по ESC
+    VK_SPACE:
+      TogglePlayPause; // Пауза/воспроизведение по пробелу
+    VK_UP:
+      VolumeUp; // Увеличить громкость
+    VK_DOWN:
+      VolumeDown; // Уменьшить громкость
+  end;
+end;
+
+procedure TfrmStickyForm.VolumeUp;
+begin
+  var NewVolume := FVlc.Volume + 10;
+  if NewVolume > 100 then NewVolume := 100;
+  FVlc.Volume := NewVolume;
+  tvVolume.Position := NewVolume;
+end;
+
+procedure TfrmStickyForm.VolumeDown;
+begin
+  var NewVolume := FVlc.Volume - 10;
+  if NewVolume < 0 then NewVolume := 0;
+  FVlc.Volume := NewVolume;
+  tvVolume.Position := NewVolume;
+end;
+
+procedure TfrmStickyForm.FullScreenFormDblClick(Sender: TObject);
+begin
+  (Sender as TForm).ModalResult := mrCancel; // Выход по двойному клику
+//  FullScreenForm.Close;
+end;
+
+// Вспомогательные методы для управления в полноэкранном режиме
+procedure TfrmStickyForm.TogglePlayPause;
+begin
+  if FVlc.IsPlaying then
+  begin
+    FVlc.Pause;
+    LoadPNGToControl(FButtonDir + 'play.png', sbPlay);
+  end
+  else
+  begin
+    FVlc.Play;
+    LoadPNGToControl(FButtonDir + 'stop-playing.png', sbPlay);
+  end;
+end;
+
+
+
+procedure TfrmStickyForm.sbFullScreenClick(Sender: TObject);
+var
+  aFullScreenForm: TFullScreenForm;
+  oldParent: TWinControl;
+  oldAlign: TAlign;
+  wasPlaying: Boolean;
+  currentPosition: Int64;
+
+  // Переменные для сохранения событий
+  oldOnClick: TNotifyEvent;
+  oldOnDblClick: TNotifyEvent;
+  oldOnMouseDown: TMouseEvent;
+  oldOnMouseMove: TMouseMoveEvent;
+  oldOnMouseUp: TMouseEvent;
+  oldOnKeyDown: TKeyEvent;
+  oldOnKeyPress: TKeyPressEvent;
+  oldOnKeyUp: TKeyEvent;
+begin
+  // СОХРАНЯЕМ СОСТОЯНИЕ И ВСЕ СОБЫТИЯ
+  oldParent := FVlc.Parent;
+  oldAlign := FVlc.Align;
+  wasPlaying := FVlc.IsPlaying;
+  currentPosition := FVlc.GetPosition;
+
+  // Сохраняем все обработчики событий
+  oldOnClick := FVlc.OnClick;
+  oldOnDblClick := FVlc.OnDblClick;
+  oldOnMouseDown := FVlc.OnMouseDown;
+  oldOnMouseMove := FVlc.OnMouseMove;
+  oldOnMouseUp := FVlc.OnMouseUp;
+
+
+  // Создаем полноэкранную форму
+  aFullScreenForm := TFullScreenForm.Create(nil);
+  try
+    aFullScreenForm.SetBounds(Monitor.Left, Monitor.Top, Monitor.Width, Monitor.Height);
+
+    // НАСТРАИВАЕМ ОБРАБОТЧИКИ СОБЫТИЙ ДЛЯ ПОЛНОЭКРАННОЙ ФОРМЫ
+    aFullScreenForm.OnKeyDown := FullScreenFormKeyDown;
+    aFullScreenForm.OnDblClick := FullScreenFormDblClick;
+    aFullScreenForm.KeyPreview := True; // Важно: форма получает события первой
+
+    // ПЕРЕНОС В ПОЛНОЭКРАННЫЙ РЕЖИМ
+    if wasPlaying then
+      FVlc.Stop;
+
+    // Меняем родителя
+    FVlc.SetNewParent(aFullScreenForm);
+
+    // ВОССТАНАВЛИВАЕМ ВСЕ СОБЫТИЯ НА НОВОЙ ФОРМЕ
+    FVlc.OnClick := oldOnClick;
+    FVlc.OnDblClick := oldOnDblClick;
+    FVlc.OnMouseDown := oldOnMouseDown;
+    FVlc.OnMouseMove := oldOnMouseMove;
+    FVlc.OnMouseUp := oldOnMouseUp;
+
+
+    // Устанавливаем полноэкранные размеры
+    FVlc.Align := alNone;
+    FVlc.SetBounds(0, 0, Monitor.Width, Monitor.Height);
+    FVlc.Show;
+
+    // Восстанавливаем воспроизведение
+    if wasPlaying then
+    begin
+      Sleep(200);
+      FVlc.Play;
+    end;
+
+    // Показываем полноэкранную форму МОДАЛЬНО (только ShowModal)
+    aFullScreenForm.ShowModal;
+
+  finally
+    // ВОЗВРАТ ИЗ ПОЛНОЭКРАННОГО РЕЖИМА
+    if FVlc.IsPlaying then
+      FVlc.Stop;
+
+    // Возвращаем на исходную панель
+    FVlc.SetNewParent(Panel_VLC_Player);
+
+    // ВОССТАНАВЛИВАЕМ ВСЕ СОБЫТИЯ НА ИСХОДНОМ РОДИТЕЛЕ
+    FVlc.OnClick := oldOnClick;
+    FVlc.OnDblClick := oldOnDblClick;
+    FVlc.OnMouseDown := oldOnMouseDown;
+    FVlc.OnMouseMove := oldOnMouseMove;
+    FVlc.OnMouseUp := oldOnMouseUp;
+
+    // ВОССТАНАВЛИВАЕМ РАЗМЕРЫ
+    FVlc.Align := alNone;
+    FVlc.SetBounds(2, 2, Panel_VLC_Player.Width - 4, Panel_VLC_Player.Height - 4);
+    FVlc.Align := oldAlign;
+
+    FVlc.Show;
+
+    // Принудительно обновляем видео вывод
+    FVlc.ReattachVideo;
+
+    // Восстанавливаем воспроизведение
+    if wasPlaying then
+    begin
+      Sleep(200);
+      FVlc.Play;
+    end;
+
+    // Обновляем интерфейс
+    Panel_VLC_Player.Invalidate;
+
+    // Освобождаем форму
+    aFullScreenForm.Free;
+  end;
+end;
+
+
 procedure TfrmStickyForm.tvVolumeChange(Sender: TObject);
 begin
   FVlc.Volume := tvVolume.Position;
@@ -1651,7 +2229,6 @@ begin
   begin
     Fvlc.Stop;
     LoadPNGToControl(FButtonDir + 'play.png', sbPlay);
-    FVlc.SetStatusText('');
   end else
   begin
     idx := lbChannels.ItemIndex;
@@ -1686,14 +2263,13 @@ begin
   begin
     FVlc.Unmute;
     LoadPNGToControl(FButtonDir + 'volume.png', sbVolume);
-    FVlc.HideLogo;
+    FVlc.ShowTopImage := False;
   end
   else
   begin
     FVlc.Mute;
     LoadPNGToControl(FButtonDir + 'volume-mute.png', sbVolume);
-    FVlc.LoadLogoFromFile(FButtonDir + 'volume-mute-player.png');
-    FVlc.ShowLogo;
+    FVlc.ShowTopImage := True;
   end;
   sbVolume.Invalidate;
   sbVolume.Update;
