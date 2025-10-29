@@ -77,11 +77,11 @@ object frmSettings: TfrmSettings
       object edURLM3U: TLabeledEdit
         Left = 22
         Top = 160
-        Width = 329
+        Width = 305
         Height = 21
-        EditLabel.Width = 110
+        EditLabel.Width = 221
         EditLabel.Height = 13
-        EditLabel.Caption = #1057#1089#1099#1083#1082#1072' '#1085#1072' '#1092#1072#1081#1083' M3U:'
+        EditLabel.Caption = #1057#1089#1099#1083#1082#1072' '#1085#1072' '#1092#1072#1081#1083' '#1080#1083#1080' '#1091#1082#1072#1078#1080#1090#1077' '#1087#1091#1090#1100' '#1076#1086' M3U:'
         TabOrder = 2
         Text = ''
       end
@@ -120,6 +120,15 @@ object frmSettings: TfrmSettings
         Caption = #1054#1095#1080#1089#1090#1080#1090#1100' '#1082#1101#1096' '#1083#1086#1075#1086#1090#1080#1087#1086#1074' '#1082#1072#1085#1072#1083#1072', '#1090#1074' '#1087#1088#1086#1075#1088#1072#1084#1084#1099' '#1080' '#1083#1086#1075#1086#1074
         TabOrder = 6
         OnClick = btCacheClearClick
+      end
+      object btOpenM3u: TButton
+        Left = 328
+        Top = 160
+        Width = 22
+        Height = 22
+        Caption = '...'
+        TabOrder = 7
+        OnClick = btOpenM3uClick
       end
     end
     object tsAbout: TTabSheet
@@ -343,5 +352,9 @@ object frmSettings: TfrmSettings
       TabOrder = 0
       OnClick = btSaveClick
     end
+  end
+  object odM3u: TOpenDialog
+    Left = 260
+    Top = 240
   end
 end

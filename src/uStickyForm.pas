@@ -717,11 +717,10 @@ var
   Regex: TRegEx;
   Match: TMatch;
   Key, Value: string;
-  GroupTitle: string;
-  HasGroupTitle: Boolean;
   TempGroup: string;
   SkipChannel: Boolean;
-  CurrentGroupTitle: string; // ДОБАВЛЕНО: текущая группа для текущего канала
+  CurrentExtGrp: string;
+  FoundExtGrp: string;
 begin
   Inc(FGeneration);
   FLogoMap.Clear;
@@ -743,7 +742,7 @@ begin
     try
       SL.LoadFromFile(FileName, TEncoding.UTF8);
 
-      // ищем заголовок #EXTM3U и парсим epg url
+      // ищем заголовок #EXTM3U
       for i := 0 to SL.Count - 1 do
       begin
         HeaderLine := Trim(SL[i]);
@@ -756,11 +755,11 @@ begin
       end;
 
       i := 0;
-      GroupTitle := '';
+      CurrentExtGrp := '';
+
       while i < SL.Count do
       begin
         Line := Trim(SL[i]);
-        CurrentGroupTitle := GroupTitle; // ДОБАВЛЕНО: сохраняем текущую группу для этого канала
 
         // пропускаем пустые строки
         if Line = '' then
@@ -769,114 +768,105 @@ begin
           Continue;
         end;
 
-        // --------------------------
-        // Обрабатываем #EXTGRP - группу каналов
-        // --------------------------
+        // Обрабатываем #EXTGRP перед #EXTINF
         if Line.StartsWith('#EXTGRP:', True) then
         begin
-          GroupTitle := Trim(Copy(Line, 9, MaxInt));
-          WriteDebugLog('Найдена группа #EXTGRP: ' + GroupTitle);
+          CurrentExtGrp := Trim(Copy(Line, 9, MaxInt));
+          WriteDebugLog('Найдена группа #EXTGRP: ' + CurrentExtGrp);
           Inc(i);
           Continue;
         end;
 
-        // пропускаем все теги кроме #EXTINF и #EXTVLCOPT
-        if Line.StartsWith('#', True)
-          and not Line.StartsWith('#EXTINF', True)
-          and not Line.StartsWith('#EXTVLCOPT', True)
-          and not Line.StartsWith('#EXTGRP', True) then
-        begin
-          Inc(i);
-          Continue;
-        end;
-
-        // --------------------------
         // если нашли #EXTINF — начинаем новый канал
-        // --------------------------
         if Line.StartsWith('#EXTINF', True) then
         begin
           Attrs := TStringList.Create;
-          Attrs.StrictDelimiter := True;
           VLCOpts := TStringList.Create;
-          VLCOpts.StrictDelimiter := True;
-          HasGroupTitle := False;
           SkipChannel := False;
+          FoundExtGrp := '';
 
           try
-            // ИСПРАВЛЕННОЕ регулярное выражение для кириллицы
+            // Парсим атрибуты #EXTINF
             Regex := TRegEx.Create('([\w-]+)\s*=\s*("([^"]*)"|([^,\s]+))', [roIgnoreCase]);
             Match := Regex.Match(Line);
             while Match.Success do
             begin
               Key := Match.Groups[1].Value;
-              // Группа 3 - значение в кавычках, группа 4 - значение без кавычек
               if Match.Groups[3].Value <> '' then
                 Value := Match.Groups[3].Value
               else
                 Value := Match.Groups[4].Value;
 
               Attrs.Values[Key] := Value;
-              WriteDebugLog('Атрибут: ' + Key + ' = ' + Value);
-
               Match := Match.NextMatch;
             end;
 
-            // ПРОВЕРЯЕМ НАЛИЧИЕ TVG-ID - ЕСЛИ НЕТ, ПРОПУСКАЕМ КАНАЛ
+            // Проверяем TVG-ID
             if Attrs.Values['tvg-id'] = '' then
             begin
-              WriteDebugLog('Пропуск канала - отсутствует tvg-id');
               SkipChannel := True;
             end;
 
-            // имя канала после запятой - ОЧИЩАЕМ ОТ МУСОРА
+            // Имя канала
             if Pos(',', Line) > 0 then
             begin
               Name := Trim(Copy(Line, Pos(',', Line) + 1, MaxInt));
               Name := CleanChannelName(Name);
-              WriteDebugLog('Очищенное название канала: ' + Name);
             end
             else
               Name := '';
 
-            // проверяем наличие group-title в #EXTINF
             TempGroup := Attrs.Values['group-title'];
-            WriteDebugLog('Group-title из атрибутов: ' + TempGroup);
-            WriteDebugLog('Group-title из #EXTGRP: ' + CurrentGroupTitle); // ИЗМЕНЕНО: используем CurrentGroupTitle
 
-            // читаем все #EXTVLCOPT перед URL
+            // Переходим к следующей строке
             Inc(i);
-            while (i < SL.Count) and SL[i].Trim.StartsWith('#EXTVLCOPT', True) do
+
+            // Ищем #EXTGRP и #EXTVLCOPT сразу после #EXTINF
+            while (i < SL.Count) do
             begin
               Line := Trim(SL[i]);
-              Line := StringReplace(Line, '#EXTVLCOPT:', '', [rfIgnoreCase]);
-              if Pos('=', Line) > 0 then
+              if Line = '' then
               begin
-                Key := Trim(Copy(Line, 1, Pos('=', Line) - 1));
-                Value := Trim(Copy(Line, Pos('=', Line) + 1, MaxInt));
-                VLCOpts.Values[Key] := Value;
+                Inc(i);
+                Continue;
+              end;
+
+              if not Line.StartsWith('#') then
+                Break; // Дошли до URL
+
+              if Line.StartsWith('#EXTGRP:', True) then
+              begin
+                FoundExtGrp := Trim(Copy(Line, 9, MaxInt));
+                Inc(i);
+              end
+              else if Line.StartsWith('#EXTVLCOPT:', True) then
+              begin
+                Line := StringReplace(Line, '#EXTVLCOPT:', '', [rfIgnoreCase]);
+                if Pos('=', Line) > 0 then
+                begin
+                  Key := Trim(Copy(Line, 1, Pos('=', Line) - 1));
+                  Value := Trim(Copy(Line, Pos('=', Line) + 1, MaxInt));
+                  VLCOpts.Values[Key] := Value;
+                end;
+                Inc(i);
               end
               else
               begin
-                // параметр без значения
-                VLCOpts.Values[Trim(Line)] := '';
+                Break; // Другие теги - выходим
               end;
-              Inc(i);
             end;
 
-            // ищем URL потока
+            // Ищем URL
             StreamURL := 'null';
-            while (i < SL.Count) and ((Trim(SL[i]) = '') or SL[i].Trim.StartsWith('#', True)) do
-              Inc(i);
-
             if i < SL.Count then
-              StreamURL := Trim(SL[i])
-            else
-              StreamURL := 'null';
+            begin
+              StreamURL := Trim(SL[i]);
+              Inc(i); // Переходим после URL
+            end;
 
-            // ЕСЛИ КАНАЛ НЕ ПРОПУСКАЕМ - СОЗДАЕМ ЕГО
+            // Создаем канал если не пропускаем
             if not SkipChannel then
             begin
-              // создаем канал
               Info := TChannelInfo.Create;
               Info.Name := Name;
               Info.TVGID := Attrs.Values['tvg-id'];
@@ -887,48 +877,21 @@ begin
               Info.CurrentStop := 0;
               Info.TVGShift := StrToIntDef(Attrs.Values['tvg-shift'], 0);
 
-              // определяем группу: приоритет у group-title из #EXTINF, затем #EXTGRP
+              // Определяем группу
               if TempGroup <> '' then
-              begin
-                Info.GroupTitle := TempGroup;
-                WriteDebugLog('Использован group-title: ' + TempGroup);
-              end
-              else if CurrentGroupTitle <> '' then // ИЗМЕНЕНО: используем CurrentGroupTitle
-              begin
-                Info.GroupTitle := CurrentGroupTitle;
-                WriteDebugLog('Использован #EXTGRP: ' + CurrentGroupTitle);
-              end
+                Info.GroupTitle := TempGroup
+              else if FoundExtGrp <> '' then
+                Info.GroupTitle := FoundExtGrp
+              else if CurrentExtGrp <> '' then
+                Info.GroupTitle := CurrentExtGrp
               else
-              begin
-                Info.GroupTitle := ''; // Пустое поле, если нет ни group-title, ни #EXTGRP
-                WriteDebugLog('Group-title не найден, установлено пустое поле');
-              end;
+                Info.GroupTitle := '';
 
-              // сохраняем все параметры
               Info.CustomAttributes.Assign(VLCOpts);
-
-              WriteDebugLog('Добавлен канал: ' + Info.Name);
-              WriteDebugLog('  URL: ' + Info.StreamURL);
-              WriteDebugLog('  Группа: ' + Info.GroupTitle);
-              WriteDebugLog('  TVG-ID: ' + Info.TVGID);
-              WriteDebugLog('  Лого: ' + Info.LogoURL);
-              WriteDebugLog('  Сдвиг: ' + IntToStr(Info.TVGShift));
-
-              if VLCOpts.Count > 0 then
-                WriteDebugLog('  Опции VLC: ' + VLCOpts.Text);
-
               FChannels.Add(Info);
               lbChannels.Items.Add(Info.Name);
-
               QueueDownloadLogo(Info);
-            end
-            else
-            begin
-              WriteDebugLog('Канал пропущен: ' + Name);
             end;
-
-            // ВАЖНО: увеличиваем счетчик после обработки URL потока
-            Inc(i);
 
           finally
             Attrs.Free;
@@ -937,7 +900,6 @@ begin
         end
         else
         begin
-          // если это не #EXTINF, переходим к следующей строке
           Inc(i);
         end;
       end;
@@ -948,10 +910,8 @@ begin
     lbChannels.Items.EndUpdate;
   end;
 
-  // управление таймером EPG
   if Assigned(FEPGTimer) then
-  FEPGTimer.Enabled := True;
-
+    FEPGTimer.Enabled := True;
 end;
 
 function IsFullScreenMode: Boolean;

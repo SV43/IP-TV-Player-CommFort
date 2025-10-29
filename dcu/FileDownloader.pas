@@ -3,7 +3,7 @@
 interface
 
 uses
-  SysUtils, Classes, System.Net.HttpClient;
+  SysUtils, Classes, System.Net.HttpClient, IOUtils;
 
 type
   TDownloadProgressEvent = procedure(Sender: TObject; ContentLength, ReadCount: Int64) of object;
@@ -24,6 +24,9 @@ type
     function SanitizeDomain(const Domain: string): string;
     function ExtractSafeFileNameFromURL(const URL: string): string;
     function FindExistingFile(const URL: string): string;
+    function CacheLocalFile(const LocalFilePath: string): string;
+    function GetLocalFileCachePath(const OriginalPath: string): string;
+    function FindCachedLocalFile(const OriginalPath: string): string;
   public
     constructor Create;
     constructor CreateWithPath(const DownloadPath: string);
@@ -335,6 +338,174 @@ begin
   end;
 end;
 
+function TFileDownloader.GetLocalFileCachePath(const OriginalPath: string): string;
+var
+  FileName, SafeFileName, LocalCachePath: string;
+begin
+  if OriginalPath = '' then
+  begin
+    Result := '';
+    Exit;
+  end;
+
+  try
+    // Извлекаем имя файла из оригинального пути
+    FileName := ExtractFileName(OriginalPath);
+
+    // Очищаем имя файла
+    SafeFileName := SanitizeFileName(FileName);
+
+    // Создаем путь в папке local
+    LocalCachePath := IncludeTrailingPathDelimiter(FDownloadPath) + 'local\';
+
+    // Добавляем подпапку на основе хеша для распределения файлов
+    // Это предотвращает слишком много файлов в одной папке
+    if SafeFileName <> '' then
+    begin
+      // Используем первый символ имени файла как подпапку
+      var SubFolder := '';
+      if Length(SafeFileName) > 0 then
+      begin
+        SubFolder := LowerCase(SafeFileName[1]);
+        if not CharInSet(SafeFileName[1], ['a'..'z', 'A'..'Z', '0'..'9']) then
+          SubFolder := 'other';
+      end
+      else
+        SubFolder := 'other';
+
+      LocalCachePath := LocalCachePath + SubFolder + '\';
+    end;
+
+    Result := LocalCachePath + SafeFileName;
+
+  except
+    on E: Exception do
+    begin
+      // В случае ошибки создаем временное имя
+      Result := IncludeTrailingPathDelimiter(FDownloadPath) + 'local\temp_' +
+                FormatDateTime('yyyymmddhhnnss', Now) + '.tmp';
+    end;
+  end;
+end;
+
+function TFileDownloader.FindCachedLocalFile(const OriginalPath: string): string;
+var
+  SearchRec: TSearchRec;
+  CachePath, SearchFileName, LocalCacheBase: string;
+begin
+  Result := '';
+
+  if OriginalPath = '' then
+    Exit;
+
+  try
+    var OriginalFileName := ExtractFileName(OriginalPath);
+    var SafeFileName := SanitizeFileName(OriginalFileName);
+
+    if SafeFileName = '' then
+      Exit;
+
+    LocalCacheBase := IncludeTrailingPathDelimiter(FDownloadPath) + 'local\';
+
+    // Ищем файл во всех подпапках local
+    if FindFirst(LocalCacheBase + '*.*', faDirectory, SearchRec) = 0 then
+    begin
+      try
+        repeat
+          if (SearchRec.Name <> '.') and (SearchRec.Name <> '..') and
+             ((SearchRec.Attr and faDirectory) <> 0) then // Только папки
+          begin
+            CachePath := LocalCacheBase + SearchRec.Name + '\' + SafeFileName;
+            if FileExists(CachePath) then
+            begin
+              Result := CachePath;
+              Break;
+            end;
+          end;
+        until FindNext(SearchRec) <> 0;
+      finally
+        FindClose(SearchRec);
+      end;
+    end;
+
+  except
+    // В случае ошибки возвращаем пустую строку
+    Result := '';
+  end;
+end;
+
+function TFileDownloader.CacheLocalFile(const LocalFilePath: string): string;
+var
+  CachePath, TempPath: string;
+  SourceStream, DestStream: TFileStream;
+begin
+  Result := '';
+
+  if (LocalFilePath = '') or (not FileExists(LocalFilePath)) then
+    Exit;
+
+  try
+    // Получаем путь для кэширования
+    CachePath := GetLocalFileCachePath(LocalFilePath);
+
+    // Если файл уже есть в кэше, проверяем его актуальность
+    if FileExists(CachePath) then
+    begin
+      var OriginalSize := GetFileSize(LocalFilePath);
+      var CachedSize := GetFileSize(CachePath);
+
+      // Если размеры совпадают, считаем файл актуальным
+      if (OriginalSize = CachedSize) and (OriginalSize > 0) then
+      begin
+        Result := CachePath;
+        Exit;
+      end;
+    end;
+
+    // Создаем папки для кэша
+    ForceDirectories(ExtractFilePath(CachePath));
+
+    // Создаем временный файл для безопасного копирования
+    TempPath := CachePath + '.copying';
+
+    // Копируем файл
+    SourceStream := TFileStream.Create(LocalFilePath, fmOpenRead or fmShareDenyWrite);
+    try
+      DestStream := TFileStream.Create(TempPath, fmCreate);
+      try
+        DestStream.CopyFrom(SourceStream, 0);
+      finally
+        DestStream.Free;
+      end;
+    finally
+      SourceStream.Free;
+    end;
+
+    // Заменяем старый кэшированный файл
+    if FileExists(CachePath) then
+      DeleteFile(PChar(CachePath));
+
+    if RenameFile(TempPath, CachePath) then
+      Result := CachePath
+    else
+    begin
+      // Если переименование не удалось, удаляем временный файл
+      if FileExists(TempPath) then
+        DeleteFile(PChar(TempPath));
+      Result := '';
+    end;
+
+  except
+    on E: Exception do
+    begin
+      // Удаляем временный файл в случае ошибки
+      if FileExists(TempPath) then
+        DeleteFile(PChar(TempPath));
+      Result := '';
+    end;
+  end;
+end;
+
 function TFileDownloader.IsURL(const FilePath: string): Boolean;
 begin
   Result := IsRemoteFile(FilePath);
@@ -372,7 +543,10 @@ begin
       ForceDirectories(ExtractFilePath(Result));
     end
     else
-      Result := URL;
+    begin
+      // Для локального файла используем кэширование
+      Result := GetLocalFileCachePath(URL);
+    end;
   except
     on E: Exception do
     begin
@@ -537,6 +711,7 @@ var
   IsRemote: Boolean;
   OldSize, NewSize: Int64;
   NeedsDownload: Boolean;
+  CachedLocalFile: string;
 begin
   WasDownloaded := False;
   Result := '';
@@ -549,24 +724,18 @@ begin
 
     if IsRemote then
     begin
-      // GetLocalFilePath теперь сначала ищет существующий файл
+      // Логика для удаленных файлов (без изменений)
       LocalPath := GetLocalFilePath(FilePath);
 
-      // Проверяем существование локального файла
       if FileExists(LocalPath) then
       begin
-        // Проверяем, изменился ли файл на сервере
         NeedsDownload := CheckRemoteFileChanged(FilePath, LocalPath);
 
         if NeedsDownload then
         begin
-          // Сохраняем старый размер для сравнения
           OldSize := GetFileSize(LocalPath);
-
-          // Скачиваем новую версию
           if DownloadFile(FilePath, LocalPath) then
           begin
-            // Проверяем, действительно ли файл изменился
             NewSize := GetFileSize(LocalPath);
             WasDownloaded := (OldSize <> NewSize);
           end;
@@ -574,7 +743,6 @@ begin
       end
       else
       begin
-        // Файл не существует, скачиваем
         if DownloadFile(FilePath, LocalPath) then
           WasDownloaded := True;
       end;
@@ -583,9 +751,34 @@ begin
     end
     else
     begin
-      // Локальный файл
+      // Локальный файл - простая логика
       if FileExists(FilePath) then
-        Result := FilePath;
+      begin
+        // Файл существует - используем его и обновляем кэш
+        Result := CacheLocalFile(FilePath);
+        WasDownloaded := (Result <> '');
+
+        // Если кэширование не удалось, все равно возвращаем оригинальный путь
+        if Result = '' then
+          Result := FilePath;
+      end
+      else
+      begin
+        // Файл не существует - ищем в кэше
+        CachedLocalFile := FindCachedLocalFile(FilePath);
+
+        if (CachedLocalFile <> '') and FileExists(CachedLocalFile) then
+        begin
+          // Нашли в кэше - используем его
+          Result := CachedLocalFile;
+          WasDownloaded := False;
+        end
+        else
+        begin
+          // Не нашли ни в оригинале, ни в кэше
+          Result := '';
+        end;
+      end;
     end;
 
   except

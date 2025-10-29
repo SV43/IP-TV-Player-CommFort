@@ -35,9 +35,12 @@ type
     cbLog: TCheckBox;
     lbLog: TLabel;
     btCacheClear: TButton;
+    btOpenM3u: TButton;
+    odM3u: TOpenDialog;
     procedure FormShow(Sender: TObject);
     procedure btSaveClick(Sender: TObject);
     procedure btCacheClearClick(Sender: TObject);
+    procedure btOpenM3uClick(Sender: TObject);
 
   private
     { Private declarations }
@@ -84,6 +87,17 @@ begin
    DeleteFolder(path + '\IPTV_Plugin\epg');
    SafeDeleteFile(path + '\IPTV_Plugin\debug.log');
    ShowMessage('Кэш полностью очищен!!!');
+end;
+
+procedure TfrmSettings.btOpenM3uClick(Sender: TObject);
+begin
+  odM3u.Filter := 'Текстовые файлы (*.m3u)|*.m3u|Все файлы (*.*)|*.*';
+  odM3u.FilterIndex := 1;
+  odM3u.InitialDir := 'C:\';
+  odM3u.Options := [ofFileMustExist, ofEnableSizing];
+
+  if odM3u.Execute then
+    edURLM3U.Text :=  odM3u.FileName;
 end;
 
 procedure TfrmSettings.btSaveClick(Sender: TObject);
