@@ -45,7 +45,7 @@ procedure TFullScreenForm.MouseDown(Button: TMouseButton; Shift: TShiftState; X,
 begin
   if (Button = mbLeft) and (ssDouble in Shift) then
   begin
-    if Assigned(FOnDblClick) then
+   if Assigned(FOnDblClick) then
       FOnDblClick(Self);
   end;
   inherited;

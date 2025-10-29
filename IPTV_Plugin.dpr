@@ -10,7 +10,8 @@ uses
   uSettings in 'src\uSettings.pas' {frmSettings},
   NativeXml in 'dcu\NativeXml.pas',
   Vlccomponent in 'dcu\Vlccomponent.pas',
-  VlcVisualComponent in 'dcu\VlcVisualComponent.pas';
+  VlcVisualComponent in 'dcu\VlcVisualComponent.pas',
+  FileDownloader in 'dcu\FileDownloader.pas';
 
 //{$LIBVERSION 'cfplug'}
 

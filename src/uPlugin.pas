@@ -92,11 +92,11 @@ begin
   DebugMsg('Save settings');
   Ini := TIniFile.Create(path+'IPTV_Plugin\IPTV_Plug.ini');
   try
-    Ini.WriteString('Settings','VideoLan VLC Dll', frmSettings.dePachVLC.Text);
-    Ini.WriteString('Settings','Style', frmSettings.lePachStyle.Text);
     Ini.WriteString('Settings','Chann IPTV Plug', frmSettings.cbIPTVchan.Text);
-    Ini.WriteString('Settings','URL M3U', frmSettings.edURLM3U.Text);
     ini.WriteBool('Settings', 'LoadEPG', frmSettings.cbJTV.Checked);
+    ini.WriteBool('Settings', 'LogCheck', frmSettings.cbLog.Checked);
+    Ini.WriteString('IPTV-Player','URL EPG', frmSettings.deEpg.Text);
+    Ini.WriteString('IPTV-Player','URL M3U', frmSettings.edURLM3U.Text);
     Ini.WriteInteger('IPTV-Player','Volume', frmStickyForm.tvVolume.Position);
   finally
     Ini.Free;
@@ -112,11 +112,11 @@ begin
   DebugMsg('Open settings');
   Ini := TIniFile.Create(path+'IPTV_Plugin\IPTV_Plug.ini');
   try
-    frmSettings.dePachVLC.Text := Ini.ReadString('Settings', 'VideoLan VLC Dll', path + 'IPTV_Plugin\VLC');
-    frmSettings.lePachStyle.Text := Ini.ReadString('Settings', 'Style', path + 'IPTV_Plugin\style\');
     frmSettings.cbIPTVchan.Text := Ini.ReadString('Settings', 'Chann IPTV Plug','IP-TV');
-    frmSettings.edURLM3U.Text   := Ini.ReadString('Settings', 'URL M3U','');
     frmSettings.cbJTV.Checked := Ini.ReadBool('Settings', 'LoadEPG', True);
+    frmSettings.cbLog.Checked := Ini.ReadBool('Settings', 'LogCheck', False);
+    frmSettings.edURLM3U.Text   := Ini.ReadString('IPTV-Player', 'URL M3U','');
+    frmSettings.deEpg.Text := Ini.ReadString('IPTV-Player', 'URL EPG', 'https://iptvx.one/epg/epg_lite.xml.gz');
     if Assigned(frmStickyForm) and Assigned(frmStickyForm.tvVolume) then
        frmStickyForm.tvVolume.Position := Ini.ReadInteger('IPTV-Player','Volume', 100);
   finally
@@ -152,7 +152,6 @@ var
 begin
   Result := Integer(False);
   try
-    DebugMsg('PluginStart: init');
 
     dwPluginID := dwThisPluginID;
     CommFortProcess := func1;
@@ -184,6 +183,8 @@ begin
 
     path := GetDataFromBuffer(BUFFER_ID_PATH);
     if path = '' then Exit;
+
+    DebugMsg('PluginStart: init');
 
     CommFort_Adress := GetDataFromBuffer(BUFFER_ID_ADDRESS);
     if CommFort_Adress = '' then Exit;

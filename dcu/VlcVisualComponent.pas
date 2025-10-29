@@ -300,7 +300,9 @@ type
     function GetCurrentMediaURL: string;
     procedure SetNewParent(NewParent: TWinControl);
     function GetActualLoadingProgress: Integer;
+    function IsPointInVideoArea(const P: TPoint): Boolean;
 
+    procedure ForceRehookMouseEvents;
   published
     // Опубликованные свойства
     property LibPath: string read FLibPath write FLibPath;
@@ -617,6 +619,79 @@ end;
 
 { TVlcPlayer }
 
+function TVlcPlayer.IsPointInVideoArea(const P: TPoint): Boolean;
+begin
+  Result := False;
+  if FVideoPanel = nil then Exit;
+
+  Result := (P.X >= FVideoPanel.Left) and
+            (P.Y >= FVideoPanel.Top) and
+            (P.X < FVideoPanel.Left + FVideoPanel.Width) and
+            (P.Y < FVideoPanel.Top + FVideoPanel.Height);
+end;
+
+procedure TVlcPlayer.ForceRehookMouseEvents;
+begin
+  Log('ForceRehookMouseEvents: Starting forced mouse hook reinitialization...');
+
+  try
+    // 1. Временно отключаем перехват
+    if Assigned(FOriginalWndProc) then
+    begin
+      WindowProc := FOriginalWndProc;
+      Log('ForceRehookMouseEvents: Original WndProc restored temporarily');
+    end;
+
+    // 2. Ждем немного для стабильности
+    Sleep(10);
+
+    // 3. Принудительно обновляем видео handle
+    UpdateVideoHandle;
+
+    if FVideoHandle <> 0 then
+    begin
+      Log(Format('ForceRehookMouseEvents: Video handle updated to %d', [FVideoHandle]));
+    end
+    else
+    begin
+      Log('ForceRehookMouseEvents: WARNING - Video handle is zero!');
+    end;
+
+    // 4. Снова включаем перехват
+    FOriginalWndProc := WindowProc;
+    WindowProc := MainWndProc;
+
+    // 5. Принудительно обновляем геометрию
+    UpdateVideoPanelMargins;
+
+    // 6. Логируем состояние
+    if FVideoPanel <> nil then
+    begin
+      Log(Format('ForceRehookMouseEvents: Video panel at [%d,%d,%d,%d]',
+        [FVideoPanel.Left, FVideoPanel.Top, FVideoPanel.Width, FVideoPanel.Height]));
+    end
+    else
+    begin
+      Log('ForceRehookMouseEvents: WARNING - Video panel is nil!');
+    end;
+
+    Log('ForceRehookMouseEvents: Mouse hook force re-established successfully');
+
+  except
+    on E: Exception do
+    begin
+      Log(Format('ForceRehookMouseEvents: ERROR - %s', [E.Message]));
+      // Пытаемся восстановить перехват даже при ошибке
+      if Assigned(FOriginalWndProc) then
+      begin
+        FOriginalWndProc := WindowProc;
+        WindowProc := MainWndProc;
+        Log('ForceRehookMouseEvents: Emergency mouse hook restoration attempted');
+      end;
+    end;
+  end;
+end;
+
 // НОВЫЕ МЕТОДЫ ДЛЯ ПЕРЕХВАТА СОБЫТИЙ МЫШИ
 procedure TVlcPlayer.MainWndProc(var Message: TMessage);
 var
@@ -907,17 +982,25 @@ procedure TVlcPlayer.UpdateVideoPanelMargins;
 begin
   if FVideoPanel <> nil then
   begin
-    // Устанавливаем положение и размер с учетом отступов
+    // ИСПОЛЬЗУЕМ ClientWidth вместо Width!
+    var NewWidth := ClientWidth;
+    var NewHeight := ClientHeight - FVideoTopMargin - FVideoBottomMargin;
+
+    if NewWidth < 10 then NewWidth := 10;
+    if NewHeight < 10 then NewHeight := 10;
+
     FVideoPanel.SetBounds(
       0,
       FVideoTopMargin,
-      Width,
-      Height - FVideoTopMargin - FVideoBottomMargin
+      NewWidth,
+      NewHeight
     );
-    Log(Format('Обновлены отступы видео: верх=%dpx, низ=%dpx', [FVideoTopMargin, FVideoBottomMargin]));
+
+    Log(Format('VIDEO PANEL UPDATED: [L:%d,T:%d,W:%d,H:%d] (Client: %dx%d, Bounds: %dx%d)',
+      [FVideoPanel.Left, FVideoPanel.Top, FVideoPanel.Width, FVideoPanel.Height,
+       ClientWidth, ClientHeight, Width, Height]));
   end;
 end;
-
 procedure TVlcPlayer.SetVideoMargins(TopMargin, BottomMargin: Integer);
 begin
   if (FVideoTopMargin <> TopMargin) or (FVideoBottomMargin <> BottomMargin) then
@@ -1014,6 +1097,8 @@ begin
 
   Log('VLC Player создан. Перехват событий мыши активирован.');
 end;
+
+
 
 destructor TVlcPlayer.Destroy;
 begin
@@ -1119,21 +1204,23 @@ procedure TVlcPlayer.Resize;
 begin
   inherited Resize;
 
+  Log(Format('RESIZE: Client=%dx%d, Bounds=%dx%d',
+    [ClientWidth, ClientHeight, Width, Height]));
+
   // Обновляем размер видео панели с учетом отступов
   UpdateVideoPanelMargins;
 
   // Обновляем позицию текста
-  FInfoText.Y := Height - 20;
+  FInfoText.Y := ClientHeight - 20;
+
+  ForceRehookMouseEvents;
 
   // Принудительно переустанавливаем видео вывод при изменении размера
   if (FPlayer <> nil) and (FVideoHandle <> 0) and IsPlaying then
   begin
-    // Небольшая задержка для стабильности
     Sleep(50);
     T_libvlc_media_player_set_hwnd(FPlayer, Pointer(FVideoHandle));
   end;
-
-  Log('Размер компонента изменен: ' + IntToStr(Width) + 'x' + IntToStr(Height));
 end;
 
 procedure TVlcPlayer.WndProc(var Message: TMessage);

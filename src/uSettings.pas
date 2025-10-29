@@ -6,20 +6,20 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.ExtCtrls,
   Vcl.StdCtrls, Vcl.Mask,Winapi.ShellAPI, Winapi.UrlMon,
-  Vcl.Buttons,  Vcl.ComCtrls, Vcl.Imaging.pngimage, FileCtrl;
+  Vcl.Buttons,  Vcl.ComCtrls, Vcl.Imaging.pngimage, FileCtrl, FileDownloader,
+  System.IOUtils;
 
 type
   TfrmSettings = class(TForm)
     pcSettings: TPageControl;
     tsSettings: TTabSheet;
     tsAbout: TTabSheet;
-    dePachVLC: TLabeledEdit;
+    deEpg: TLabeledEdit;
     lbCCaptionChanel: TLabel;
     cbIPTVchan: TComboBox;
     edURLM3U: TLabeledEdit;
     pnButton: TPanel;
     btSave: TButton;
-    lePachStyle: TLabeledEdit;
     iVLC: TImage;
     lbNamePlug: TLabel;
     lbAutor: TLabel;
@@ -29,15 +29,15 @@ type
     lbYer: TLabel;
     cbJTV: TCheckBox;
     Label1: TLabel;
-    sbPathVLC: TSpeedButton;
-    sbPathTheme: TSpeedButton;
     leDebygLogPath: TLabeledEdit;
     Label2: TLabel;
     Label3: TLabel;
+    cbLog: TCheckBox;
+    lbLog: TLabel;
+    btCacheClear: TButton;
     procedure FormShow(Sender: TObject);
     procedure btSaveClick(Sender: TObject);
-    procedure sbPathVLCClick(Sender: TObject);
-    procedure sbPathThemeClick(Sender: TObject);
+    procedure btCacheClearClick(Sender: TObject);
 
   private
     { Private declarations }
@@ -54,6 +54,38 @@ implementation
 
 uses uPlugin, uStickyForm;
 
+function DeleteFolder(const FolderPath: string): Boolean;
+begin
+  try
+    if TDirectory.Exists(FolderPath) then
+    begin
+      TDirectory.Delete(FolderPath, True);
+      Result := True;
+    end
+    else
+      Result := False;
+  except
+    Result := False;
+  end;
+end;
+
+function SafeDeleteFile(const FileName: string): Boolean;
+begin
+  if FileExists(FileName) then
+    Result := DeleteFile(FileName)
+  else
+    Result := True; // ‘айла нет - считаем что удален
+end;
+
+procedure TfrmSettings.btCacheClearClick(Sender: TObject);
+begin
+   DeleteFolder(path + '\IPTV_Plugin\m3u');
+   DeleteFolder(path + '\IPTV_Plugin\logo-channels');
+   DeleteFolder(path + '\IPTV_Plugin\epg');
+   SafeDeleteFile(path + '\IPTV_Plugin\debug.log');
+   ShowMessage(' эш полностью очищен!!!');
+end;
+
 procedure TfrmSettings.btSaveClick(Sender: TObject);
 begin
   reenter;
@@ -68,21 +100,5 @@ begin
 end;
 
 
-
-procedure TfrmSettings.sbPathVLCClick(Sender: TObject);
-var
-  Dir: string;
-begin
-  if SelectDirectory('”кажите путь до модулей VLC', '', Dir) then
-     dePachVLC.Text := Dir;
-end;
-
-procedure TfrmSettings.sbPathThemeClick(Sender: TObject);
-var
-  Dir: string;
-begin
-  if SelectDirectory('”кажите путь до шаблона', '', Dir) then
-     lePachStyle.Text := Dir;
-end;
 
 end.

@@ -13,7 +13,7 @@ uses
   RegularExpressions, System.Net.HttpClientComponent, System.Math,
   uImageTrackBar, uSettings, FullScreenFormUnit, System.ZLib, System.NetEncoding,
   DateUtils, System.Net.HttpClient, Xml.XMLDoc, xmldom, Xml.XMLIntf, Xml.adomxmldom,
-  NativeXml, VlcVisualComponent, IniFiles;
+  NativeXml, VlcVisualComponent, IniFiles, FileDownloader;
 type
   TEPGItem = record
     Title: string;
@@ -56,7 +56,6 @@ type
     lbChannels: TListBox;
     sbOpen: TSpeedButton;
     ilLogos: TImageList;
-    odFile: TOpenDialog;
     sbVolume: TSpeedButton;
     tvVolume: TImageTrackBar;
     Panel_Channels: TPanel;
@@ -88,6 +87,7 @@ type
     procedure TimeEpgStatusTimer(Sender: TObject);
     procedure sbFullScreenClick(Sender: TObject);
     procedure FVlcDblClick(Sender: TObject);
+    procedure FVlcVideoDblClick(Sender: TObject);
   private
     FChannels: TList<TChannelInfo>;
     FLogoMap: TDictionary<string, Integer>; // ключ = LowerCase(LogoURL)
@@ -142,6 +142,7 @@ type
     procedure TogglePlayPause;
     procedure VolumeUp;
     procedure VolumeDown;
+    procedure DownloadM3UFromURL(const URL: string);
     { Public declarations }
   end;
 
@@ -152,6 +153,9 @@ var
   FEpgUrls: TStringList;
   FEPGTimer: TTimer;
   FEPGStartTimer: TTimer; // timer to delay EPG start
+  FButtonDir: String;
+  FimageChan:String;
+  aFullScreenForm: TFullScreenForm;
 
 implementation
 
@@ -188,13 +192,16 @@ begin
   try
     // пишем рядом с остальными данными (папка из настроек)
     LogPath := path + 'IPTV_Plugin\debug.log';
-    AssignFile(LogFile, LogPath);
-    if FileExists(LogPath) then
-      Append(LogFile)
-    else
-      Rewrite(LogFile);
-    Writeln(LogFile, FormatDateTime('[dd.mm.yyyy hh:nn:ss]', Now) + ' - ' + Msg);
-    CloseFile(LogFile);
+    if frmSettings.cbLog.Checked then
+    begin
+      AssignFile(LogFile, LogPath);
+      if FileExists(LogPath) then
+        Append(LogFile)
+      else
+         Rewrite(LogFile);
+        Writeln(LogFile, FormatDateTime('[dd.mm.yyyy hh:nn:ss]', Now) + ' - ' + Msg);
+        CloseFile(LogFile);
+    end;
   except
     // не даём логированию упасть
   end;
@@ -210,11 +217,23 @@ var
   Index: Integer;
 begin
   if not Assigned(Control) then
-    raise Exception.Create('Компонент не определен');
+    Exit; // Игнорируем, если компонент не определен
+
+  // Проверяем существование файла
+  if not FileExists(FileName) then
+    Exit; // Игнорируем, если файл не найден
 
   PNG := TPngImage.Create;
   try
-    PNG.LoadFromFile(FileName);
+    try
+      PNG.LoadFromFile(FileName);
+    except
+      on E: Exception do
+      begin
+        // Игнорируем ошибки загрузки PNG
+        Exit;
+      end;
+    end;
 
     Bmp := TBitmap.Create;
     try
@@ -262,7 +281,6 @@ begin
     PNG.Free;
   end;
 end;
-
 
 procedure TfrmStickyForm.PlayChannelByIndex(AIndex: Integer);
 var
@@ -338,7 +356,8 @@ begin
   begin
      FVlc.ShowTopImage := True;
      LoadPNGToControl(FButtonDir + 'volume-mute.png', sbVolume);
-  end;
+  end else
+  LoadPNGToControl(FButtonDir + 'volume.png', sbVolume);
 
 end;
 
@@ -375,7 +394,7 @@ begin
     Exit;
   end;
 
-  NoLogoPath := frmSettings.lePachStyle.Text + 'logo-channels\NoLogo.png';
+  NoLogoPath := FCacheDir + 'NoLogo.png';
 
   LogoFile := AFileName;
   if not FileExists(LogoFile) then
@@ -427,7 +446,7 @@ var
   noLogoPath: string;
   itemRect: TRect;
 begin
-  noLogoPath := frmSettings.lePachStyle.Text + 'logo-channels\NoLogo.png';
+  noLogoPath := FCacheDir + 'NoLogo.png';
 
   if not FileExists(noLogoPath) then
     Exit; // fallback — файла вообще нет
@@ -491,7 +510,7 @@ var
   DestPath, FileName, LogoDir: string;
   localGen: Integer;
 begin
-  LogoDir := IncludeTrailingPathDelimiter(frmSettings.lePachStyle.Text) + 'logo-channels\';
+  LogoDir := path+'IPTV_Plugin\logo-channels\';
 
   // Проверка на существование канала в списке
   if lbChannels.Items.IndexOf(Channel.Name) < 0 then Exit;
@@ -669,6 +688,23 @@ begin
   end;
 end;
 
+function IsModalWindowOpen(AFormClass: TFormClass = nil): Boolean;
+var
+  i: Integer;
+begin
+  Result := False;
+  for i := 0 to Screen.CustomFormCount - 1 do
+  begin
+    if fsModal in Screen.CustomForms[i].FormState then
+    begin
+      if (AFormClass = nil) or (Screen.CustomForms[i] is AFormClass) then
+      begin
+        Result := True;
+        Exit;
+      end;
+    end;
+  end;
+end;
 
 procedure TfrmStickyForm.ParseM3U(const FileName: string);
 var
@@ -684,6 +720,8 @@ var
   GroupTitle: string;
   HasGroupTitle: Boolean;
   TempGroup: string;
+  SkipChannel: Boolean;
+  CurrentGroupTitle: string; // ДОБАВЛЕНО: текущая группа для текущего канала
 begin
   Inc(FGeneration);
   FLogoMap.Clear;
@@ -722,6 +760,7 @@ begin
       while i < SL.Count do
       begin
         Line := Trim(SL[i]);
+        CurrentGroupTitle := GroupTitle; // ДОБАВЛЕНО: сохраняем текущую группу для этого канала
 
         // пропускаем пустые строки
         if Line = '' then
@@ -761,6 +800,8 @@ begin
           VLCOpts := TStringList.Create;
           VLCOpts.StrictDelimiter := True;
           HasGroupTitle := False;
+          SkipChannel := False;
+
           try
             // ИСПРАВЛЕННОЕ регулярное выражение для кириллицы
             Regex := TRegEx.Create('([\w-]+)\s*=\s*("([^"]*)"|([^,\s]+))', [roIgnoreCase]);
@@ -780,15 +821,18 @@ begin
               Match := Match.NextMatch;
             end;
 
+            // ПРОВЕРЯЕМ НАЛИЧИЕ TVG-ID - ЕСЛИ НЕТ, ПРОПУСКАЕМ КАНАЛ
+            if Attrs.Values['tvg-id'] = '' then
+            begin
+              WriteDebugLog('Пропуск канала - отсутствует tvg-id');
+              SkipChannel := True;
+            end;
+
             // имя канала после запятой - ОЧИЩАЕМ ОТ МУСОРА
             if Pos(',', Line) > 0 then
             begin
               Name := Trim(Copy(Line, Pos(',', Line) + 1, MaxInt));
-
-              // Убираем все атрибуты и мусор из названия
-              // Ищем позицию первого пробела или конца строки после названия
               Name := CleanChannelName(Name);
-
               WriteDebugLog('Очищенное название канала: ' + Name);
             end
             else
@@ -797,9 +841,7 @@ begin
             // проверяем наличие group-title в #EXTINF
             TempGroup := Attrs.Values['group-title'];
             WriteDebugLog('Group-title из атрибутов: ' + TempGroup);
-            WriteDebugLog('Group-title из #EXTGRP: ' + GroupTitle);
-
-            // УДАЛЕН БЛОК ПРОПУСКА КАНАЛА - ВСЕГДА СОЗДАЕМ КАНАЛ
+            WriteDebugLog('Group-title из #EXTGRP: ' + CurrentGroupTitle); // ИЗМЕНЕНО: используем CurrentGroupTitle
 
             // читаем все #EXTVLCOPT перед URL
             Inc(i);
@@ -831,51 +873,62 @@ begin
             else
               StreamURL := 'null';
 
-            // создаем канал
-            Info := TChannelInfo.Create;
-            Info.Name := Name;
-            Info.TVGID := Attrs.Values['tvg-id'];
-            Info.LogoURL := Attrs.Values['tvg-logo'];
-            Info.StreamURL := StreamURL;
-            Info.CurrentTitle := '';
-            Info.CurrentStart := 0;
-            Info.CurrentStop := 0;
-            Info.TVGShift := StrToIntDef(Attrs.Values['tvg-shift'], 0);
+            // ЕСЛИ КАНАЛ НЕ ПРОПУСКАЕМ - СОЗДАЕМ ЕГО
+            if not SkipChannel then
+            begin
+              // создаем канал
+              Info := TChannelInfo.Create;
+              Info.Name := Name;
+              Info.TVGID := Attrs.Values['tvg-id'];
+              Info.LogoURL := Attrs.Values['tvg-logo'];
+              Info.StreamURL := StreamURL;
+              Info.CurrentTitle := '';
+              Info.CurrentStart := 0;
+              Info.CurrentStop := 0;
+              Info.TVGShift := StrToIntDef(Attrs.Values['tvg-shift'], 0);
 
-            // определяем группу: приоритет у group-title из #EXTINF, затем #EXTGRP
-            if TempGroup <> '' then
-            begin
-              Info.GroupTitle := TempGroup;
-              WriteDebugLog('Использован group-title: ' + TempGroup);
-            end
-            else if GroupTitle <> '' then
-            begin
-              Info.GroupTitle := GroupTitle;
-              WriteDebugLog('Использован #EXTGRP: ' + GroupTitle);
+              // определяем группу: приоритет у group-title из #EXTINF, затем #EXTGRP
+              if TempGroup <> '' then
+              begin
+                Info.GroupTitle := TempGroup;
+                WriteDebugLog('Использован group-title: ' + TempGroup);
+              end
+              else if CurrentGroupTitle <> '' then // ИЗМЕНЕНО: используем CurrentGroupTitle
+              begin
+                Info.GroupTitle := CurrentGroupTitle;
+                WriteDebugLog('Использован #EXTGRP: ' + CurrentGroupTitle);
+              end
+              else
+              begin
+                Info.GroupTitle := ''; // Пустое поле, если нет ни group-title, ни #EXTGRP
+                WriteDebugLog('Group-title не найден, установлено пустое поле');
+              end;
+
+              // сохраняем все параметры
+              Info.CustomAttributes.Assign(VLCOpts);
+
+              WriteDebugLog('Добавлен канал: ' + Info.Name);
+              WriteDebugLog('  URL: ' + Info.StreamURL);
+              WriteDebugLog('  Группа: ' + Info.GroupTitle);
+              WriteDebugLog('  TVG-ID: ' + Info.TVGID);
+              WriteDebugLog('  Лого: ' + Info.LogoURL);
+              WriteDebugLog('  Сдвиг: ' + IntToStr(Info.TVGShift));
+
+              if VLCOpts.Count > 0 then
+                WriteDebugLog('  Опции VLC: ' + VLCOpts.Text);
+
+              FChannels.Add(Info);
+              lbChannels.Items.Add(Info.Name);
+
+              QueueDownloadLogo(Info);
             end
             else
             begin
-              Info.GroupTitle := ''; // Пустое поле, если нет ни group-title, ни #EXTGRP
-              WriteDebugLog('Group-title не найден, установлено пустое поле');
+              WriteDebugLog('Канал пропущен: ' + Name);
             end;
 
-            // сохраняем все параметры
-            Info.CustomAttributes.Assign(VLCOpts);
-
-            WriteDebugLog('Добавлен канал: ' + Info.Name);
-            WriteDebugLog('  URL: ' + Info.StreamURL);
-            WriteDebugLog('  Группа: ' + Info.GroupTitle);
-            WriteDebugLog('  TVG-ID: ' + Info.TVGID);
-            WriteDebugLog('  Лого: ' + Info.LogoURL);
-            WriteDebugLog('  Сдвиг: ' + IntToStr(Info.TVGShift));
-
-            if VLCOpts.Count > 0 then
-              WriteDebugLog('  Опции VLC: ' + VLCOpts.Text);
-
-            FChannels.Add(Info);
-            lbChannels.Items.Add(Info.Name);
-
-            QueueDownloadLogo(Info);
+            // ВАЖНО: увеличиваем счетчик после обработки URL потока
+            Inc(i);
 
           finally
             Attrs.Free;
@@ -883,7 +936,10 @@ begin
           end;
         end
         else
+        begin
+          // если это не #EXTINF, переходим к следующей строке
           Inc(i);
+        end;
       end;
     finally
       SL.Free;
@@ -894,7 +950,8 @@ begin
 
   // управление таймером EPG
   if Assigned(FEPGTimer) then
-    FEPGTimer.Enabled := frmSettings.cbJTV.Checked;
+  FEPGTimer.Enabled := True;
+
 end;
 
 function IsFullScreenMode: Boolean;
@@ -927,7 +984,7 @@ begin
   if ilLogos <> nil then
     ilLogos.Clear;
 
-  NoLogoPath := frmSettings.lePachStyle.Text + 'logo-channels\NoLogo.png';
+  NoLogoPath := FCacheDir + 'NoLogo.png';
 
   BMP := TBitmap.Create;
   try
@@ -1110,6 +1167,7 @@ begin
   Ini := TIniFile.Create(path + 'IPTV_Plugin\IPTV_Plug.ini');
   try
     tvVolume.Position := Ini.ReadInteger('IPTV-Player', 'Volume', 100);
+    FButtonDir := Ini.ReadString('Settings', 'Style', path + 'IPTV_Plugin\style\');
   finally
     Ini.Free;
   end;
@@ -1122,10 +1180,37 @@ begin
   Save;
 end;
 
+procedure TfrmStickyForm.DownloadM3UFromURL(const URL: string);
+var
+  Downloader: TFileDownloader;
+  LocalFile: string;
+  WasDownloaded: Boolean;
+begin
+  Downloader := TFileDownloader.Create;
+  try
+    LocalFile := Downloader.EnsureFileAvailableEx(
+      URL,
+      WasDownloaded,
+      path+'IPTV_Plugin\m3u'
+    );
+
+    if LocalFile <> '' then
+       ParseM3U(LocalFile);
+
+  finally
+    Downloader.Free;
+  end;
+end;
+
 procedure TfrmStickyForm.FormCreate(Sender: TObject);
 var
   NoLogoPath: string;
+  Downloader: TFileDownloader;
+  LocalFile: string;
+  WasDownloaded: Boolean;
 begin
+  LoadSettings;
+
   Randomize;
   FChannels := TList<TChannelInfo>.Create;
   FLogoMap := TDictionary<string, Integer>.Create;
@@ -1158,20 +1243,18 @@ begin
     FEPGStartTimer.Enabled  := True;
   end;
 
-  if (FChannels.Count = 0) and FileExists(frmSettings.edURLM3U.Text) then
-     ParseM3U(frmSettings.edURLM3U.Text);
 
-  NoLogoPath := frmSettings.lePachStyle.Text + 'logo-channels\NoLogo.png';
+  DownloadM3UFromURL(frmSettings.edURLM3U.Text);
+
+
+  NoLogoPath := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin\logo-channels\NoLogo.png';
   if FileExists(NoLogoPath) then
     AddImageFromFileToImageList(NoLogoPath, 'NoLogo');
 
 
-
-
   // Сначала путь к библиотеке
-  FVlc.LibPath := frmSettings.dePachVLC.Text;
+  FVlc.LibPath := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin';
   FVlc.ShowTopImage := False;
-  LoadSettings;
   FVlc.EnableMouseEvents;
 end;
 
@@ -1194,6 +1277,7 @@ begin
   FreeAndNil(FEPGTimer);
   FreeAndNil(FEPGStartTimer);
   FreeAndNil(FullScreenForm);
+  FVlc.Free;
 end;
 
 procedure TfrmStickyForm.FormShow(Sender: TObject);
@@ -1201,10 +1285,8 @@ begin
   lbChannels.Style := lbOwnerDrawFixed;
   lbChannels.ItemHeight := Max(ilLogos.Height + 4, 80);
 
-
-
-  FCacheDir  := frmSettings.lePachStyle.Text + 'logo-channels\';
-  FButtonDir := frmSettings.lePachStyle.Text + 'image-button\';
+  FCacheDir  := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin\logo-channels\';
+  FButtonDir := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin\image-button\';
 
   ForceDirectories(FCacheDir);
 
@@ -1233,7 +1315,11 @@ begin
     tvVolume.ThumbFile := FButtonDir + 'thumb-48.png';
 
     if tvVolume.Position = 0 then
-       LoadPNGToControl(FButtonDir + 'volume-mute.png', sbVolume) else
+    begin
+       LoadPNGToControl(FButtonDir + 'volume-mute.png', sbVolume);
+       FVlc.ShowTopImage := True;
+    end
+       else
        LoadPNGToControl(FButtonDir + 'volume.png', sbVolume);
 
     FVlc.TopImage.LoadFromFile(FButtonDir + 'volume-mute-player.png');
@@ -1243,7 +1329,28 @@ end;
 
 procedure TfrmStickyForm.FVlcDblClick(Sender: TObject);
 begin
-  sbFullScreenClick(self);
+  if not (FVlc.Parent is TFullScreenForm) then
+  begin
+    sbFullScreenClick(self);
+  end;
+    if IsModalWindowOpen(TFullScreenForm) then
+    begin
+      keybd_event(VK_ESCAPE, 0, 0, 0);
+      keybd_event(VK_ESCAPE, 0, KEYEVENTF_KEYUP, 0);
+    end;
+end;
+
+procedure TfrmStickyForm.FVlcVideoDblClick(Sender: TObject);
+begin
+  if not (FVlc.Parent is TFullScreenForm) then
+  begin
+    sbFullScreenClick(self);
+  end;
+    if IsModalWindowOpen(TFullScreenForm) then
+    begin
+      keybd_event(VK_ESCAPE, 0, 0, 0);
+      keybd_event(VK_ESCAPE, 0, KEYEVENTF_KEYUP, 0);
+    end;
 end;
 
 procedure TfrmStickyForm.EPGTimerHandler(Sender: TObject);
@@ -1586,14 +1693,39 @@ var
   i, total: Integer;
   FilePath, XmlPath: string;
   FileAgeHours: Double;
+  EpgUrl: string;
 begin
   WriteDebugLog('Запуск DownloadAndParseAllEPG');
   ClearCurrentPrograms;
 
-  if (FEpgUrls = nil) or (FEpgUrls.Count = 0) then
+  // Определяем источник EPG в зависимости от состояния чекбокса
+  if frmSettings.cbJTV.Checked then
   begin
-    WriteDebugLog('Нет EPG URL');
-    Exit;
+    // Используем плейлист для получения EPG
+    if (FEpgUrls = nil) or (FEpgUrls.Count = 0) then
+    begin
+      WriteDebugLog('Нет EPG URL из плейлиста');
+      Exit;
+    end;
+    WriteDebugLog('Используем EPG из плейлиста');
+  end
+  else
+  begin
+    // Используем пользовательский EPG из deEpg.text
+    if Trim(frmSettings.deEpg.Text) = '' then
+    begin
+      WriteDebugLog('Нет пользовательского EPG URL');
+      Exit;
+    end;
+
+    // Создаем временный список с одним URL
+    if FEpgUrls = nil then
+      FEpgUrls := TStringList.Create
+    else
+      FEpgUrls.Clear;
+
+    FEpgUrls.Add(frmSettings.deEpg.Text);
+    WriteDebugLog('Используем пользовательский EPG: ' + frmSettings.deEpg.Text);
   end;
 
   total := FEpgUrls.Count;
@@ -1606,9 +1738,12 @@ begin
     end;
 
     try
+      // Получаем текущий URL
+      EpgUrl := FEpgUrls[i];
+
       // Проверяем возраст существующего файла EPG
-      FilePath := IncludeTrailingPathDelimiter(frmSettings.lePachStyle.Text) + 'epg\' +
-                  StringReplace(FEpgUrls[i], 'https://', '', [rfIgnoreCase]);
+      FilePath := path+'IPTV_Plugin\epg\' +
+                  StringReplace(EpgUrl, 'https://', '', [rfIgnoreCase]);
       FilePath := StringReplace(FilePath, 'http://', '', [rfIgnoreCase]);
       FilePath := StringReplace(FilePath, '/', PathDelim, [rfReplaceAll]);
 
@@ -1629,16 +1764,16 @@ begin
         end
         else
         begin
-          WriteDebugLog('Файл старше 24 часов, скачиваем заново: ' + FEpgUrls[i]);
+          WriteDebugLog('Файл старше 24 часов, скачиваем заново: ' + EpgUrl);
         end;
       end
       else
       begin
-        WriteDebugLog('Файл EPG не существует, скачиваем: ' + FEpgUrls[i]);
+        WriteDebugLog('Файл EPG не существует, скачиваем: ' + EpgUrl);
       end;
 
-      WriteDebugLog('Загрузка EPG: ' + FEpgUrls[i]);
-      DownloadAndParseEPG(FEpgUrls[i]);
+      WriteDebugLog('Загрузка EPG: ' + EpgUrl);
+      DownloadAndParseEPG(EpgUrl);
 
     except
       on E: Exception do
@@ -1649,6 +1784,10 @@ begin
 
     Sleep(100);
   end;
+
+  // Если использовали временный список для пользовательского EPG, очищаем его
+  if not frmSettings.cbJTV.Checked and (FEpgUrls <> nil) then
+    FEpgUrls.Clear;
 
   if not FStopRequested then
     TThread.Queue(nil,
@@ -1700,7 +1839,7 @@ begin
   WriteDebugLog('DownloadAndParseEPG: ' + AUrl);
 
   // Преобразуем URL → путь на диске
-  FilePath := IncludeTrailingPathDelimiter(frmSettings.lePachStyle.Text) + 'epg\' +
+  FilePath := path+'IPTV_Plugin\epg\' +
               StringReplace(AUrl, 'https://', '', [rfIgnoreCase]);
   FilePath := StringReplace(FilePath, 'http://', '', [rfIgnoreCase]);
   FilePath := StringReplace(FilePath, '/', PathDelim, [rfReplaceAll]);
@@ -1989,13 +2128,11 @@ end;
 procedure TfrmStickyForm.sbOpenClick(Sender: TObject);
 
 begin
-  odFile.Filter := 'M3U playlist (*.m3u)|*.m3u|All files (*.*)|*.*';
-  if odFile.Execute then
+  frmSettings.ShowModal;
+
+  if not Assigned(frmSettings) then else
   begin
-    ParseM3U(odFile.FileName);
-    frmSettings.edURLM3U.Text := odFile.FileName;
-    Save;
-  // use anonymous thread for periodic EPG refresh (safer in DLL)
+    DownloadM3UFromURL(frmSettings.edURLM3U.Text);
   TThread.CreateAnonymousThread(
     procedure
     begin
@@ -2101,10 +2238,9 @@ begin
 end;
 
 
-
 procedure TfrmStickyForm.sbFullScreenClick(Sender: TObject);
 var
-  aFullScreenForm: TFullScreenForm;
+
   oldParent: TWinControl;
   oldAlign: TAlign;
   wasPlaying: Boolean;

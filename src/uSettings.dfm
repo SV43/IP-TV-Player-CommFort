@@ -3,7 +3,7 @@ object frmSettings: TfrmSettings
   Top = 0
   BorderIcons = [biSystemMenu]
   Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
-  ClientHeight = 369
+  ClientHeight = 405
   ClientWidth = 388
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -17,22 +17,22 @@ object frmSettings: TfrmSettings
     Left = 0
     Top = 0
     Width = 388
-    Height = 328
-    ActivePage = tsAbout
+    Height = 364
+    ActivePage = tsSettings
     Align = alClient
     TabOrder = 0
     object tsSettings: TTabSheet
       Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080' '#1087#1083#1072#1075#1080#1085#1072
       object lbCCaptionChanel: TLabel
-        Left = 24
-        Top = 104
+        Left = 22
+        Top = 96
         Width = 212
         Height = 13
         Caption = #1050#1072#1085#1072#1083' '#1074' '#1082#1086#1090#1086#1088#1086#1084' '#1073#1091#1076#1077#1090' '#1088#1072#1073#1086#1090#1072#1090#1100' '#1087#1083#1072#1075#1080#1085':'
       end
       object Label1: TLabel
-        Left = 40
-        Top = 224
+        Left = 38
+        Top = 73
         Width = 253
         Height = 13
         Caption = '* '#1055#1088#1080' '#1073#1086#1083#1100#1096#1086#1084' m3u '#1083#1080#1089#1090#1077' '#1079#1085#1072#1095#1080#1090#1077#1083#1100#1085#1072#1103' '#1085#1072#1075#1088#1091#1079#1082#1072
@@ -43,82 +43,83 @@ object frmSettings: TfrmSettings
         Font.Style = []
         ParentFont = False
       end
-      object sbPathVLC: TSpeedButton
-        Left = 330
-        Top = 32
-        Width = 23
-        Height = 22
-        Caption = '...'
-        OnClick = sbPathVLCClick
+      object lbLog: TLabel
+        Left = 59
+        Top = 247
+        Width = 232
+        Height = 13
+        Caption = '* '#1042#1085#1080#1084#1072#1085#1080#1077'! '#1060#1072#1081#1083' '#1083#1086#1075#1086#1074' '#1073#1091#1076#1077#1090' '#1073#1099#1089#1090#1088#1086' '#1088#1086#1089#1090#1080'!'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clRed
+        Font.Height = -11
+        Font.Name = 'Tahoma'
+        Font.Style = []
+        ParentFont = False
       end
-      object sbPathTheme: TSpeedButton
-        Left = 330
-        Top = 77
-        Width = 23
-        Height = 22
-        Caption = '...'
-        OnClick = sbPathThemeClick
-      end
-      object dePachVLC: TLabeledEdit
-        Left = 24
+      object deEpg: TLabeledEdit
+        Left = 22
         Top = 32
-        Width = 305
+        Width = 329
         Height = 21
-        EditLabel.Width = 66
+        EditLabel.Width = 137
         EditLabel.Height = 13
-        EditLabel.Caption = #1055#1091#1090#1100' '#1076#1086' VLC:'
+        EditLabel.Caption = #1057#1089#1099#1083#1082#1072' '#1085#1072' '#1090#1077#1083#1077#1087#1088#1086#1075#1088#1072#1084#1084#1091':'
         TabOrder = 0
         Text = ''
       end
       object cbIPTVchan: TComboBox
-        Left = 24
-        Top = 123
+        Left = 22
+        Top = 115
         Width = 329
         Height = 21
         TabOrder = 1
       end
       object edURLM3U: TLabeledEdit
-        Left = 24
-        Top = 168
+        Left = 22
+        Top = 160
         Width = 329
         Height = 21
-        EditLabel.Width = 104
+        EditLabel.Width = 110
         EditLabel.Height = 13
-        EditLabel.Caption = #1055#1091#1090#1100' '#1076#1086' '#1092#1072#1081#1083#1072' M3U:'
+        EditLabel.Caption = #1057#1089#1099#1083#1082#1072' '#1085#1072' '#1092#1072#1081#1083' M3U:'
         TabOrder = 2
         Text = ''
       end
-      object lePachStyle: TLabeledEdit
-        Left = 24
-        Top = 77
-        Width = 305
-        Height = 21
-        EditLabel.Width = 133
-        EditLabel.Height = 13
-        EditLabel.Caption = #1055#1091#1090#1100' '#1076#1086' '#1092#1072#1081#1083#1086#1074' '#1096#1072#1073#1083#1086#1085#1072':'
-        TabOrder = 3
-        Text = ''
-      end
       object cbJTV: TCheckBox
-        Left = 24
-        Top = 208
+        Left = 22
+        Top = 57
         Width = 329
         Height = 17
         Caption = #1057#1082#1072#1095#1080#1074#1072#1090#1100' '#1058#1042' '#1087#1088#1086#1075#1088#1072#1084#1084#1091' '#1077#1089#1083#1080' '#1086#1085#1072' '#1087#1088#1086#1087#1080#1089#1072#1085#1072' '#1074' M3U'
-        Checked = True
-        State = cbChecked
-        TabOrder = 4
+        TabOrder = 3
       end
       object leDebygLogPath: TLabeledEdit
-        Left = 24
-        Top = 264
+        Left = 22
+        Top = 208
         Width = 327
         Height = 21
         EditLabel.Width = 121
         EditLabel.Height = 13
         EditLabel.Caption = #1055#1091#1090#1100' '#1076#1086' '#1083#1086#1075#1086#1074' '#1087#1083#1072#1075#1080#1085#1072':'
-        TabOrder = 5
+        TabOrder = 4
         Text = ''
+      end
+      object cbLog: TCheckBox
+        Left = 22
+        Top = 232
+        Width = 305
+        Height = 17
+        Caption = #1055#1086#1076#1088#1086#1073#1085#1099#1081' '#1083#1086#1075
+        TabOrder = 5
+      end
+      object btCacheClear: TButton
+        Left = 22
+        Top = 280
+        Width = 329
+        Height = 25
+        Caption = #1054#1095#1080#1089#1090#1080#1090#1100' '#1082#1101#1096' '#1083#1086#1075#1086#1090#1080#1087#1086#1074' '#1082#1072#1085#1072#1083#1072', '#1090#1074' '#1087#1088#1086#1075#1088#1072#1084#1084#1099' '#1080' '#1083#1086#1075#1086#1074
+        TabOrder = 6
+        OnClick = btCacheClearClick
       end
     end
     object tsAbout: TTabSheet
@@ -328,14 +329,14 @@ object frmSettings: TfrmSettings
   end
   object pnButton: TPanel
     Left = 0
-    Top = 328
+    Top = 364
     Width = 388
     Height = 41
     Align = alBottom
     TabOrder = 1
     object btSave: TButton
-      Left = 128
-      Top = 8
+      Left = 122
+      Top = 6
       Width = 129
       Height = 25
       Caption = #1055#1088#1080#1084#1077#1085#1080#1090#1100

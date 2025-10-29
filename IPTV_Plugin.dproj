@@ -125,6 +125,7 @@
         <DCCReference Include="dcu\NativeXml.pas"/>
         <DCCReference Include="dcu\Vlccomponent.pas"/>
         <DCCReference Include="dcu\VlcVisualComponent.pas"/>
+        <DCCReference Include="dcu\FileDownloader.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

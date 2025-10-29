@@ -1,7 +1,4 @@
-﻿[odFile]
-Coordinates=42,143,50,36
-
-[Panel_VLC_Player]
+﻿[Panel_VLC_Player]
 Coordinates=180,10,123,58
 
 [sbPlay]
@@ -60,5 +57,5 @@ Coordinates=313,10,92,58
 Coordinates=10,144,59,36
 
 []
-Coordinates=409,111,52,36
+Coordinates=42,143,50,36
 

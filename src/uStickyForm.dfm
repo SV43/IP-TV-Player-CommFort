@@ -140,6 +140,7 @@ object frmStickyForm: TfrmStickyForm
         'Accept-Encoding=gzip, deflate, br')
       InfoText.FontSize = 10
       InfoText.Y = 408
+      OnVideoDblClick = FVlcVideoDblClick
       Align = alClient
       BevelOuter = bvNone
       Color = clBlack
@@ -195,10 +196,6 @@ object frmStickyForm: TfrmStickyForm
     Width = 50
     Left = 129
     Top = 225
-  end
-  object odFile: TOpenDialog
-    Left = 329
-    Top = 217
   end
   object PlayerStatus: TTimer
     Enabled = False
