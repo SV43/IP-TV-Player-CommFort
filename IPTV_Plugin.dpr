@@ -9,9 +9,7 @@ uses
   uImageTrackBar in 'src\uImageTrackBar.pas',
   uSettings in 'src\uSettings.pas' {frmSettings},
   NativeXml in 'dcu\NativeXml.pas',
-  Vlccomponent in 'dcu\Vlccomponent.pas',
-  VlcVisualComponent in 'dcu\VlcVisualComponent.pas',
-  FileDownloader in 'dcu\FileDownloader.pas';
+  VlcVisualComponent in 'dcu\VlcVisualComponent.pas';
 
 //{$LIBVERSION 'cfplug'}
 

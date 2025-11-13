@@ -1,0 +1,199 @@
+#EXTM3U url-tvg="https://iptvx.one/epg/epg_lite.xml.gz"
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Первый канал.png" tvg-id="pervy",Первый канал HD
+http://85.112.114.10:8087/udp/238.2.49.234:1234
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Россия 1.png" tvg-id="rossia1",Россия 1 HD
+http://85.112.114.10:8087/udp/233.170.170.86:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Матч! ТВ.png" tvg-id="match-tv",МАТЧ! HD
+http://85.112.114.10:8087/udp/233.170.170.244:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/НТВ.png" tvg-id="ntv",НТВ HD
+http://cdn2.ntv.ru/ntv0_hd/tracks-v1a1/mono.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Пятый канал.png" tvg-id="5kanal-ru",Пятый канал
+http://178.163.51.173:4022/udp/234.0.0.205:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Россия Культура.png" tvg-id="kultura",Россия Культура
+https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/kultura-hd/track_105_319a299f/chunklist.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Россия 24.png" tvg-id="rossia-24",Россия 24
+https://vgtrkregion-reg.cdnvideo.ru/vgtrk/0/russia24-hd/1080p.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Карусель.png" tvg-id="karusel",Карусель
+http://178.163.51.173:4022/udp/234.0.0.203:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/ОТР.png" tvg-id="otr",ОТР
+https://river-ost-rtk-543.rtbcdn.ru/stream/genetta-315.m9.rutube.ru/CSRIs9Csc1AgYHDbTQzUQg/1759174435/faa934385b83f9e8a92f5484defae5fa/720p_stream.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/ТВЦ.png" tvg-id="tvcentr",ТВЦ
+http://178.163.51.173:4022/udp/234.0.0.192:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/РенТВ.png" tvg-id="rentv",РЕН ТВ HD
+http://85.112.114.10:8087/udp/233.170.170.235:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Спас.png" tvg-id="spas",Спас
+http://178.163.51.173:4022/udp/234.0.0.215:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/СТС.png" tvg-id="sts",СТС HD
+http://85.112.114.10:8087/udp/233.170.170.237:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Домашний.png" tvg-id="domashny",Домашний
+http://178.163.51.173:4022/udp/234.0.0.191:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/ТВ3 ru.png" tvg-id="tv3-ru",ТВ3 HD
+http://85.112.114.10:8087/udp/233.170.170.79:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Пятница!.png" tvg-id="piatnica",Пятница! HD
+http://85.112.114.10:8087/udp/233.170.170.112:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Звезда.png" tvg-id="zvezda",Звезда
+http://178.163.51.173:4022/udp/234.0.0.237:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Мир.png" tvg-id="mir",Мир
+http://178.163.51.173:4022/udp/234.0.0.5:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/ТНТ.png" tvg-id="tnt",ТНТ HD
+http://85.112.114.10:8087/udp/233.170.170.78:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/МузТВ.png" tvg-id="muztv",Муз-ТВ
+http://178.163.51.173:4022/udp/234.0.0.96:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Солнце.png" tvg-id="solnce",Солнце
+http://178.163.51.173:4022/udp/234.0.0.198:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Киносвидание.png" tvg-id="kinosvidanie-int",Киносвидание HD
+http://85.112.114.10:8087/udp/233.170.170.64:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Киноужас.png" tvg-id="kinouzhas",Киноужас HD
+http://85.112.114.10:8087/udp/233.170.170.245:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Киномикс.png" tvg-id="kinomiks",Киномикс HD
+http://85.112.114.10:8087/udp/233.170.170.65:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Мужское кино.png" tvg-id="muzhskoe-kino",Мужское кино HD
+http://85.112.114.10:8087/udp/233.170.170.47:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Кинокомедия.png" tvg-id="kinokomedia",Кинокомедия
+http://178.163.51.173:4022/udp/234.0.0.118:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Кухня ТВ.png" tvg-id="kuxnia-tv",Кухня ТВ
+http://178.163.51.173:4022/udp/234.0.0.241:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Индийское Кино.png" tvg-id="indiyskoe-kino",Индийское Кино
+http://rhsbjv7k.tvclub.xyz/iptv/ESMHU7B3S7N5NW/146/index.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Киносерия.png" tvg-id="kinoseria-int",Киносерия HD
+http://85.112.114.10:8087/udp/233.170.170.123:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Кинопремьера.png" tvg-id="kinopremiera-int",Кинопремьера HD
+http://85.112.114.10:8087/udp/233.170.170.46:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Киносемья.png" tvg-id="kinosemiya",Киносемья HD
+http://85.112.114.10:8087/udp/233.170.170.62:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Кинохит.png" tvg-id="kinoxit",Кинохит HD
+http://85.112.114.10:8087/udp/233.170.170.63:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/2x2.png" tvg-id="2na2",2x2 HD
+http://85.112.114.10:8087/udp/233.170.170.118:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Моя Планета.png" tvg-id="moya-planeta",Моя Планета HD
+http://85.112.114.10:8087/udp/238.2.49.118:1234
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Наука 2.0.png" tvg-id="nauka-20",Наука 2.0
+http://178.163.51.173:4022/udp/234.0.0.226:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Мульт.png" tvg-id="mult",Мульт HD
+http://85.112.114.10:8087/udp/238.2.49.56:1234
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Сарафан.png" tvg-id="sarafan",Сарафан
+http://178.163.51.173:4022/udp/234.0.0.246:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Доктор.png" tvg-id="doktor",Доктор
+http://178.163.51.173:4022/udp/234.0.0.232:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Техно 24.png" tvg-id="texno-24",Техно 24
+http://178.163.51.173:4022/udp/234.0.0.247:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Мама.png" tvg-id="mama",Мама
+http://178.163.51.173:4022/udp/234.0.0.101:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Москва Доверие.png" tvg-id="doverie",Москва Доверие
+http://178.163.51.173:4022/udp/234.0.0.99:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Дом кино.png" tvg-id="domkino",Дом кино
+http://178.163.51.173:4022/udp/234.0.0.219:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Музыка Первого.png" tvg-id="muzyka-pervogo",Музыка Первого
+http://178.163.51.173:4022/udp/234.0.0.182:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/ТНТ4.png" tvg-id="tnt4",ТНТ4 HD
+http://85.112.114.10:8087/udp/233.170.170.130:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Известия.png" tvg-id="izvestia",Известия HD
+http://85.112.114.10:8087/udp/233.170.170.59:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Terra.png" tvg-id="terra-ru",Terra HD
+http://85.112.114.10:8087/udp/233.170.170.133:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Star Cinema.png" tvg-id="star-cinema",Star Cinema HD Россия
+http://85.112.114.10:8087/udp/233.170.170.173:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Star Family.png" tvg-id="star-family",Star Family HD Россия
+http://85.112.114.10:8087/udp/233.170.170.174:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Bolt.png" tvg-id="bolt-ru",Bolt HD Россия
+http://85.112.114.10:8087/udp/233.170.170.175:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Че!.png" tvg-id="che",Че!
+http://178.163.51.173:4022/udp/234.0.0.218:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/СТС Kids.png" tvg-id="sts-kids-hd",СТС Kids HD
+http://85.112.114.10:8087/udp/233.170.170.145:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Кинеко.png" tvg-id="kineko",Кинеко HD
+http://85.112.114.10:8087/udp/233.170.170.132:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Сапфир.png" tvg-id="sapfir",Сапфир HD
+http://85.112.114.10:8087/udp/238.2.49.239:1234
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Матч! Страна.png" tvg-id="match-nash-sport",Матч! Страна
+http://178.163.51.173:4022/udp/234.0.0.188:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Матч! Игра.png" tvg-id="match-igra",Матч! Игра HD
+http://85.112.114.10:8087/udp/238.2.49.12:1234
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Матч! Арена.png" tvg-id="match-arena",Матч! Арена HD
+http://85.112.114.10:8087/udp/233.170.170.3:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Матч! Боец.png" tvg-id="match-boets",Матч! Боец
+http://178.163.51.173:4022/udp/234.0.0.6:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Матч! Премьер.png" tvg-id="match-premier",Матч! Премьер HD
+http://85.112.114.10:8087/udp/233.170.170.4:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Матч! Футбол 1.png" tvg-id="match-football1",Матч! Футбол 1 HD
+http://85.112.114.10:8087/udp/233.170.170.5:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Матч! Футбол 2.png" tvg-id="match-football2",Матч! Футбол 2 HD
+http://85.112.114.10:8087/udp/233.170.170.6:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Матч! Футбол 3.png" tvg-id="match-football3",Матч! Футбол 3 HD
+http://85.112.114.10:8087/udp/233.170.170.7:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Шансон ТВ.png" tvg-id="shanson-tv",Шансон ТВ
+http://178.163.51.173:4022/udp/234.0.0.189:2000
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/KroneHit TV.png" tvg-id="kronehit",KroneHit TV
+http://bitcdn-kronehit.bitmovin.com/v2/hls/chunklist_b1628000.m3u8
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Blue Hustler.png" tvg-id="blue-hustler",Blue Hustler HD +18
+http://85.112.114.10:8087/udp/233.170.170.190:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Babes TV.png" tvg-id="babes-tv",Babes TV HD +18
+http://85.112.114.10:8087/udp/233.170.170.58:58631
+
+#EXTINF:-1 tvg-logo="https://commfort.su/TVimage/Щёлк.png" tvg-id="sholk",Щёлк HD +18
+http://85.112.114.10:8087/udp/233.170.170.38:58631

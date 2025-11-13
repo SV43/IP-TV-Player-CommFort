@@ -1,4 +1,4 @@
-unit uPlugin;
+п»їunit uPlugin;
 
 interface
 
@@ -45,11 +45,11 @@ var
   frmStickyForm: TfrmStickyForm = nil;
   StickyChanName: string;
 
-  // глобальный ID плагина
+  // ГЈГ«Г®ГЎГ Г«ГјГ­Г»Г© ID ГЇГ«Г ГЈГЁГ­Г 
   dwPluginID: DWORD = 0;
 
 // =======================================================
-// Логирование
+// Г‹Г®ГЈГЁГ°Г®ГўГ Г­ГЁГҐ
 // =======================================================
 var
   LogFile: TextFile;
@@ -71,12 +71,12 @@ begin
 
     OutputDebugString(PChar('IPTV_Plugin: ' + S));
   except
-    // игнорируем ошибки
+    // ГЁГЈГ­Г®Г°ГЁГ°ГіГҐГ¬ Г®ГёГЁГЎГЄГЁ
   end;
 end;
 
 // =======================================================
-// Вспомогательные
+// Г‚Г±ГЇГ®Г¬Г®ГЈГ ГІГҐГ«ГјГ­Г»ГҐ
 // =======================================================
 procedure Refrash_Form;
 begin
@@ -449,7 +449,7 @@ begin
 
     if (ChanName = StickyChanName) and Assigned(frmStickyForm) then
     begin
-      // Ищем TRichView для текущего канала
+      // Г€Г№ГҐГ¬ TRichView Г¤Г«Гї ГІГҐГЄГіГ№ГҐГЈГ® ГЄГ Г­Г Г«Г 
       CurrentHandle := FindWindowEx(ChannelsPanel, 0, 'TRichView', nil);
       while (CurrentHandle <> 0) and (not IsWindowVisible(CurrentHandle)) do
         CurrentHandle := FindWindowEx(ChannelsPanel, CurrentHandle, 'TRichView', nil);
@@ -461,11 +461,11 @@ begin
       frmStickyForm.Show;
       FixWindowPos(frmStickyForm);
 
-      DebugMsg('Форма прикреплена к ' + ChanName);
+      DebugMsg('Г”Г®Г°Г¬Г  ГЇГ°ГЁГЄГ°ГҐГЇГ«ГҐГ­Г  ГЄ ' + ChanName);
     end;
   except
     on E: Exception do
-      DebugMsg('Ошибка в ppUserEnterChannel: ' + E.Message);
+      DebugMsg('ГЋГёГЁГЎГЄГ  Гў ppUserEnterChannel: ' + E.Message);
   end;
 end;
 
@@ -517,4 +517,3 @@ begin
 end;
 
 end.
-
