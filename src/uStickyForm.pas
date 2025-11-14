@@ -9,7 +9,7 @@ uses
   System.Win.ScktComp, Vcl.Menus, Vcl.Graphics, PNGImage,
   Vcl.ExtDlgs, System.Generics.Collections, System.IOUtils,
   IdBaseComponent, IdComponent, IdTCPConnection, System.Threading,
-  System.ImageList, Vcl.ImgList, Vlccomponent,
+  System.ImageList, Vcl.ImgList, Vlccomponent, Types,
   RegularExpressions, System.Net.HttpClientComponent, System.Math,
   uImageTrackBar, uSettings, FullScreenFormUnit, System.ZLib, System.NetEncoding,
   DateUtils, System.Net.HttpClient, Xml.XMLDoc, xmldom, Xml.XMLIntf, Xml.adomxmldom,
@@ -55,7 +55,6 @@ type
     sbFullScreen: TSpeedButton;
     lbChannels: TListBox;
     sbOpen: TSpeedButton;
-    ilLogos: TImageList;
     sbVolume: TSpeedButton;
     tvVolume: TImageTrackBar;
     Panel_Channels: TPanel;
@@ -96,11 +95,12 @@ type
     FGeneration: Integer;
 
 
+    procedure DrawLogo(Canvas: TCanvas; const Rect: TRect; const LogoPath: string);
+    function GetLogoFilePath(const Channel: TChannelInfo): string;
     procedure QueueDownloadLogo(const Channel: TChannelInfo);
-    function AddImageFromFileToImageList(const AFileName, AKey: string): Integer;
     function GetLogoIndexForLogoURL(const ALogoURL: string): Integer;
     function MakeLogoFileName(const Channel: TChannelInfo): string;
-    procedure ResetImageListToNoLogo;
+
     function IsValidPNG(const MS: TMemoryStream): Boolean;
     procedure EPGTimerHandler(Sender: TObject);
 
@@ -125,7 +125,7 @@ type
     function ExtractCurrentProgram(const AText: string): string;
     procedure EpgStatus;
 
-    procedure VlcPlayerStateChanged(Sender: TObject);
+
     function CleanChannelName(const DirtyName: string): string;
     procedure LoadSettings;
     procedure ParseExistingEPGWithIndex(const XmlFilePath: string; UrlIndex: Integer);
@@ -133,8 +133,8 @@ type
     function MakeSafeFileName(const AText: string): string;
   public
     FStopRequested: Boolean;
-     FCacheDir:String;
-     FButtonDir:String;
+    FCacheDir: String;
+    FButtonDir: String;
     property ParentChanName: WideString read FParentChanName write SetParentChanName;
     property ParentChanHandle: HWND read FParentChanHandle write SetParentChanHandle;
     procedure ParseM3U(const FileName: string);
@@ -165,10 +165,7 @@ implementation
 uses uPlugin;
 
 
-procedure TfrmStickyForm.VlcPlayerStateChanged(Sender: TObject);
-begin
 
-end;
 
 
 constructor TChannelInfo.Create;
@@ -184,6 +181,7 @@ begin
   FCustomAttributes.Free;
   inherited;
 end;
+
 
 procedure WriteDebugLog(const Msg: string);
 var
@@ -214,26 +212,19 @@ procedure LoadPNGToControl(const FileName: string; Control: TControl);
 var
   PNG: TPngImage;
   Bmp: TBitmap;
-  ImageList: TImageList;
-  Index: Integer;
 begin
   if not Assigned(Control) then
-    Exit; // Игнорируем, если компонент не определен
+    Exit;
 
-  // Проверяем существование файла
   if not FileExists(FileName) then
-    Exit; // Игнорируем, если файл не найден
+    Exit;
 
   PNG := TPngImage.Create;
   try
     try
       PNG.LoadFromFile(FileName);
     except
-      on E: Exception do
-      begin
-        // Игнорируем ошибки загрузки PNG
-        Exit;
-      end;
+      Exit;
     end;
 
     Bmp := TBitmap.Create;
@@ -244,7 +235,6 @@ begin
       Bmp.Canvas.Brush.Color := clWhite;
       Bmp.Canvas.FillRect(Rect(0, 0, Bmp.Width, Bmp.Height));
 
-      // Расчет пропорций
       var ScaleX := Bmp.Width / PNG.Width;
       var ScaleY := Bmp.Height / PNG.Height;
       var Scale := Min(ScaleX, ScaleY);
@@ -257,24 +247,11 @@ begin
 
       Bmp.Canvas.StretchDraw(Rect(X, Y, X + NewWidth, Y + NewHeight), PNG);
 
-      // Обработка разных типов компонентов
       if Control is TBitBtn then
         (Control as TBitBtn).Glyph.Assign(Bmp)
       else if Control is TSpeedButton then
-        (Control as TSpeedButton).Glyph.Assign(Bmp)
-      else if Control is TButton then
-      begin
-        ImageList := TImageList.Create(nil);
-        try
-          ImageList.Width := Control.Width;
-          ImageList.Height := Control.Height;
-          Index := ImageList.Add(Bmp, nil);
-          (Control as TButton).Images := ImageList;
-          (Control as TButton).ImageIndex := Index;
-        finally
-          ImageList.Free;
-        end;
-      end;
+        (Control as TSpeedButton).Glyph.Assign(Bmp);
+
     finally
       Bmp.Free;
     end;
@@ -286,8 +263,6 @@ end;
 procedure TfrmStickyForm.PlayChannelByIndex(AIndex: Integer);
 var
   Channel: TChannelInfo;
-  Key, Value: string;
-  j: Integer;
 begin
   if (FChannels = nil) or (AIndex < 0) or (AIndex >= FChannels.Count) then
     Exit;
@@ -296,19 +271,14 @@ begin
   WriteDebugLog('--- Воспроизведение канала: ' + Channel.Name + ' ---');
   WriteDebugLog('URL: ' + Channel.StreamURL);
 
-
-
   if Channel.StreamURL = '' then
     Exit;
 
   try
-
-    // 🔹 Запускаем поток
     WriteDebugLog('Запуск потока...');
     FVlc.LoadMedia(Channel.StreamURL);
     PlayerStatus.Enabled := Enabled;
     FVlc.Play;
-
   except
     on E: Exception do
     begin
@@ -317,8 +287,6 @@ begin
   end;
 end;
 
-
-{ ------------------ Helpers ------------------ }
 
 function TfrmStickyForm.MakeLogoFileName(const Channel: TChannelInfo): string;
 var
@@ -344,22 +312,23 @@ end;
 
 procedure TfrmStickyForm.ImageTrackBar1Change(Sender: TObject);
 begin
-
   FVlc.Volume := tvVolume.Position;
   FVlc.SetDisplayText('Громкость ' + IntToStr(tvVolume.Position) + '%');
   FVlc.ShowTopImage := False;
- if FVlc.IsMuted then
+
+  if FVlc.IsMuted then
   begin
     LoadPNGToControl(FButtonDir + 'volume.png', sbVolume);
     FVlc.Unmute;
   end;
+
   if tvVolume.Position = 0 then
   begin
-     FVlc.ShowTopImage := True;
-     LoadPNGToControl(FButtonDir + 'volume-mute.png', sbVolume);
-  end else
-  LoadPNGToControl(FButtonDir + 'volume.png', sbVolume);
-
+    FVlc.ShowTopImage := True;
+    LoadPNGToControl(FButtonDir + 'volume-mute.png', sbVolume);
+  end
+  else
+    LoadPNGToControl(FButtonDir + 'volume.png', sbVolume);
 end;
 
 function TfrmStickyForm.IsValidPNG(const MS: TMemoryStream): Boolean;
@@ -374,7 +343,6 @@ begin
     MS.ReadBuffer(buf, SizeOf(buf));
     MS.Position := 0;
 
-    // Проверяем сигнатуру PNG вручную
     Result := (buf[0] = $89) and (buf[1] = $50) and (buf[2] = $4E) and (buf[3] = $47) and
               (buf[4] = $0D) and (buf[5] = $0A) and (buf[6] = $1A) and (buf[7] = $0A);
   except
@@ -383,116 +351,48 @@ begin
 end;
 
 
-function TfrmStickyForm.AddImageFromFileToImageList(const AFileName, AKey: string): Integer;
-var
-  PNG: TPngImage;
-  BMP: TBitmap;
-  idx: Integer;
-begin
-  Result := -1;
-  if AKey = '' then Exit;
-
-  // Проверяем существование файла
-  if not FileExists(AFileName) then
-  begin
-    WriteDebugLog('Файл не существует: ' + AFileName);
-    Exit;
-  end;
-
-  // Проверяем кэш
-  if FLogoMap.TryGetValue(AKey, idx) then
-  begin
-    Result := idx;
-    Exit;
-  end;
-
-  try
-    PNG := TPngImage.Create;
-    try
-      PNG.LoadFromFile(AFileName);
-
-      BMP := TBitmap.Create;
-      try
-        BMP.PixelFormat := pf32bit;
-        BMP.AlphaFormat := afDefined;
-        BMP.SetSize(ilLogos.Width, ilLogos.Height);
-
-        // Очищаем фон
-//        BMP.Canvas.Brush.Color := clNone;
-        BMP.Canvas.FillRect(Rect(0, 0, BMP.Width, BMP.Height));
-
-        // Рисуем с сохранением пропорций
-        var ScaleX := BMP.Width / PNG.Width;
-        var ScaleY := BMP.Height / PNG.Height;
-        var Scale := Min(ScaleX, ScaleY);
-
-        var NewWidth := Round(PNG.Width * Scale);
-        var NewHeight := Round(PNG.Height * Scale);
-
-        var X := (BMP.Width - NewWidth) div 2;
-        var Y := (BMP.Height - NewHeight) div 2;
-
-        BMP.Canvas.StretchDraw(Rect(X, Y, X + NewWidth, Y + NewHeight), PNG);
-
-        // Добавляем в ImageList
-        idx := ilLogos.Add(BMP, nil);
-        FLogoMap.AddOrSetValue(AKey, idx);
-        Result := idx;
-
-      finally
-        BMP.Free;
-      end;
-    finally
-      PNG.Free;
-    end;
-  except
-    on E: Exception do
-    begin
-      WriteDebugLog('Ошибка загрузки изображения: ' + E.Message);
-      Result := -1;
-    end;
-  end;
-end;
-
 
 
 
 
 procedure TfrmStickyForm.UseDefaultLogo(const Channel: TChannelInfo);
 var
-  idx, imgIndex: Integer;
-  noLogoPath: string;
-  itemRect: TRect;
+  DefaultLogoPath: string;
+  LogoIndex: Integer;
 begin
-  noLogoPath := FCacheDir + 'NoLogo.png';
+  DefaultLogoPath := FCacheDir + 'NoLogo.png';
 
-  if not FileExists(noLogoPath) then
-    Exit; // fallback — файла вообще нет
+  if FileExists(DefaultLogoPath) then
+  begin
+    // Для старого TDictionary используем Integer как индекс
+    // Предполагаем, что -1 означает "нет логотипа"
+    LogoIndex := 0; // или любое другое значение, которое вы используете для дефолтного лого
 
-  // Для безопасности UI вызываем через Synchronize
-  TThread.Synchronize(nil,
-    procedure
-    begin
-      imgIndex := AddImageFromFileToImageList(noLogoPath, 'NoLogo');
-
-      if imgIndex >= 0 then
-        FLogoMap.AddOrSetValue(Channel.TVGID, imgIndex);
-
-      idx := lbChannels.Items.IndexOf(Channel.Name + ' ' + Channel.GroupTitle);
-      if idx >= 0 then
+    try
+      FLogoMap.Add(Channel.TVGID, LogoIndex);
+    except
+      on E: EListError do
       begin
-        lbChannels.Items.Objects[idx] := TObject(NativeInt(imgIndex));
-
-        // перерисовываем только нужную строку
-        itemRect := lbChannels.ItemRect(idx);
-        InvalidateRect(lbChannels.Handle, @itemRect, True);
-        UpdateWindow(lbChannels.Handle);
+        // Игнорируем ошибку дубликата ключа
       end;
-    end
-  );
+    end;
+
+    TThread.Queue(nil,
+      procedure
+      var
+        idx: Integer;
+      begin
+        idx := lbChannels.Items.IndexOf(Channel.Name);
+        if idx >= 0 then
+          lbChannels.Invalidate;
+      end
+    );
+  end
+  else
+  begin
+    WriteDebugLog('Дефолтный логотип не найден: ' + DefaultLogoPath);
+  end;
 end;
-
-
 
 procedure ResizePNG(const InStream, OutStream: TStream; const NewWidth, NewHeight: Integer);
 var
@@ -543,6 +443,7 @@ begin
 end;
 
 
+
 function GetFileSize(const AFileName: string): Int64;
 var
   SR: TSearchRec;
@@ -562,6 +463,7 @@ var
   DestPath, FileName, LogoDir: string;
   localGen: Integer;
   SafeLogoURL: string;
+  LogoIndex: Integer;
 begin
   LogoDir := path + 'IPTV_Plugin\logo-channels\';
 
@@ -588,29 +490,27 @@ begin
   if FileExists(DestPath) then
   begin
     WriteDebugLog('✅ Логотип уже существует в кэше');
-    TThread.Synchronize(nil,
+
+    // Используем индекс 1 для существующих логотипов
+    LogoIndex := 1;
+
+    try
+      FLogoMap.Add(Channel.TVGID, LogoIndex);
+    except
+      on E: EListError do
+      begin
+        // Игнорируем ошибку дубликата ключа
+      end;
+    end;
+
+    TThread.Queue(nil,
       procedure
       var
-        imgIndex: Integer;
         idx: Integer;
       begin
-        try
-          imgIndex := AddImageFromFileToImageList(DestPath, Channel.TVGID);
-          if imgIndex >= 0 then
-          begin
-            FLogoMap.AddOrSetValue(Channel.TVGID, imgIndex);
-
-            idx := lbChannels.Items.IndexOf(Channel.Name);
-            if idx >= 0 then
-            begin
-              lbChannels.Items.Objects[idx] := TObject(imgIndex);
-              WriteDebugLog('✅ Логотип из кэша установлен для: ' + Channel.Name + ' с индексом: ' + IntToStr(imgIndex));
-            end;
-          end;
-        except
-          on E: Exception do
-            WriteDebugLog('💥 Ошибка загрузки логотипа из кэша: ' + E.Message);
-        end;
+        idx := lbChannels.Items.IndexOf(Channel.Name);
+        if idx >= 0 then
+          lbChannels.Invalidate;
       end
     );
     Exit;
@@ -649,7 +549,6 @@ begin
         try
           WriteDebugLog('📥 Скачиваем через FileDownloader: ' + SafeLogoURL);
 
-          // Используем FileDownloader для скачивания
           LocalFile := Downloader.EnsureFileAvailableEx(SafeLogoURL, WasDownloaded);
 
           if LocalFile <> '' then
@@ -657,29 +556,25 @@ begin
             WriteDebugLog('✅ FileDownloader успешно скачал: ' + LocalFile);
             WriteDebugLog('📊 Было скачано: ' + BoolToStr(WasDownloaded, True));
 
-            // Проверяем что файл валидный PNG
-            begin
-              Success := True;
+            Success := True;
 
-              // Если файл был сохранен под другим именем, переименовываем в нужное
-              if not SameText(LocalFile, DestPath) then
-              begin
-                try
-                  if FileExists(DestPath) then
-                    DeleteFile(DestPath);
-                  if RenameFile(LocalFile, DestPath) then
-                  begin
-                    WriteDebugLog('✅ Файл переименован в: ' + DestPath);
-                    LocalFile := DestPath;
-                  end
-                  else
-                  begin
-                    WriteDebugLog('⚠️ Не удалось переименовать файл, используем оригинальный путь');
-                  end;
-                except
-                  on E: Exception do
-                    WriteDebugLog('⚠️ Ошибка переименования: ' + E.Message);
+            if not SameText(LocalFile, DestPath) then
+            begin
+              try
+                if FileExists(DestPath) then
+                  DeleteFile(DestPath);
+                if RenameFile(LocalFile, DestPath) then
+                begin
+                  WriteDebugLog('✅ Файл переименован в: ' + DestPath);
+                  LocalFile := DestPath;
+                end
+                else
+                begin
+                  WriteDebugLog('⚠️ Не удалось переименовать файл, используем оригинальный путь');
                 end;
+              except
+                on E: Exception do
+                  WriteDebugLog('⚠️ Ошибка переименования: ' + E.Message);
               end;
             end;
           end
@@ -702,36 +597,29 @@ begin
       // ОБНОВЛЯЕМ ИНТЕРФЕЙС
       if Success then
       begin
+        LogoIndex := 1; // индекс для скачанных логотипов
+
+        try
+          FLogoMap.Add(Channel.TVGID, LogoIndex);
+        except
+          on E: EListError do
+          begin
+            // Игнорируем ошибку дубликата ключа
+          end;
+        end;
+
         TThread.Queue(nil,
           procedure
-          var
-            imgIndex: Integer;
-            idx: Integer;
           begin
             if localGen = FGeneration then
             begin
               try
                 WriteDebugLog('🔄 Обновляем UI для: ' + Channel.Name);
-
-                // Добавляем изображение в ImageList
-                imgIndex := AddImageFromFileToImageList(DestPath, Channel.TVGID);
-
-                if imgIndex >= 0 then
+                var idx := lbChannels.Items.IndexOf(Channel.Name);
+                if idx >= 0 then
                 begin
-                  FLogoMap.AddOrSetValue(Channel.TVGID, imgIndex);
-
-                  idx := lbChannels.Items.IndexOf(Channel.Name);
-                  if idx >= 0 then
-                  begin
-                    lbChannels.Items.Objects[idx] := TObject(imgIndex);
-                    lbChannels.Invalidate;
-                    WriteDebugLog('✅ Логотип добавлен для: ' + Channel.Name + ' индекс: ' + IntToStr(imgIndex));
-                  end;
-                end
-                else
-                begin
-                  WriteDebugLog('❌ Не удалось добавить изображение в ImageList');
-                  UseDefaultLogo(Channel);
+                  lbChannels.Invalidate;
+                  WriteDebugLog('✅ Логотип добавлен для: ' + Channel.Name);
                 end;
               except
                 on E: Exception do
@@ -760,14 +648,113 @@ begin
   ).Start;
 end;
 
+function TfrmStickyForm.GetLogoFilePath(const Channel: TChannelInfo): string;
+var
+  LogoIndex: Integer;
+  LogoPath: string;
+begin
+  Result := FCacheDir + 'NoLogo.png'; // значение по умолчанию
+
+  if FLogoMap.TryGetValue(Channel.TVGID, LogoIndex) then
+  begin
+    WriteDebugLog('GetLogoFilePath: найден индекс ' + IntToStr(LogoIndex) + ' для ' + Channel.TVGID);
+
+    if LogoIndex = 1 then // логотип канала
+    begin
+      // Формируем путь к логотипу канала
+      if Channel.TVGID <> '' then
+        LogoPath := path + 'IPTV_Plugin\logo-channels\' + MakeSafeFileName(Channel.TVGID) + '.png';
+
+      WriteDebugLog('GetLogoFilePath: ищем файл по пути: ' + LogoPath);
+
+      // Проверяем существует ли файл
+      if FileExists(LogoPath) then
+      begin
+        Result := LogoPath;
+        WriteDebugLog('GetLogoFilePath: используется кастомный логотип - ' + LogoPath);
+      end
+      else
+      begin
+          Result := FCacheDir + 'NoLogo.png';
+          WriteDebugLog('GetLogoFilePath: кастомный логотип не существует, используется дефолтный');
+          WriteDebugLog('GetLogoFilePath: TVGID: ' + Channel.TVGID);
+          WriteDebugLog('GetLogoFilePath: Name: ' + Channel.Name);
+          WriteDebugLog('GetLogoFilePath: Ожидаемый путь: ' + LogoPath);
+      end;
+    end
+    else
+    begin
+      WriteDebugLog('GetLogoFilePath: используется дефолтный логотип (индекс ' + IntToStr(LogoIndex) + ')');
+    end;
+  end
+  else
+  begin
+    WriteDebugLog('GetLogoFilePath: ключ не найден в FLogoMap - ' + Channel.TVGID);
+  end;
+end;
+
+procedure TfrmStickyForm.DrawLogo(Canvas: TCanvas; const Rect: TRect; const LogoPath: string);
+var
+  PNG: TPngImage;
+  ScaleX, ScaleY, Scale: Double;
+  NewWidth, NewHeight: Integer;
+  X, Y: Integer;
+  DestRect: TRect;
+begin
+  if not FileExists(LogoPath) then
+  begin
+    WriteDebugLog('DrawLogo: файл не существует - ' + LogoPath);
+    Exit;
+  end;
+
+  PNG := TPngImage.Create;
+  try
+    try
+      PNG.LoadFromFile(LogoPath);
+      WriteDebugLog('DrawLogo: загружен PNG - ' + LogoPath + ' размер: ' + IntToStr(PNG.Width) + 'x' + IntToStr(PNG.Height));
+
+      // Рассчитываем масштаб для сохранения пропорций
+      ScaleX := (Rect.Right - Rect.Left) / PNG.Width;
+      ScaleY := (Rect.Bottom - Rect.Top) / PNG.Height;
+      Scale := Min(ScaleX, ScaleY); // Используем минимальный масштаб для сохранения пропорций
+
+      NewWidth := Round(PNG.Width * Scale);
+      NewHeight := Round(PNG.Height * Scale);
+
+      // Центрируем изображение
+      X := Rect.Left + ((Rect.Right - Rect.Left) - NewWidth) div 2;
+      Y := Rect.Top + ((Rect.Bottom - Rect.Top) - NewHeight) div 2;
+
+      // Создаем Rect правильно - используем функцию Rect()
+      DestRect := System.Classes.Rect(X, Y, X + NewWidth, Y + NewHeight);
+
+      // Устанавливаем высокое качество отрисовки
+      SetStretchBltMode(Canvas.Handle, HALFTONE);
+      SetBrushOrgEx(Canvas.Handle, 0, 0, nil);
+
+      // Рисуем PNG напрямую с сохранением прозрачности
+      PNG.Draw(Canvas, DestRect);
+
+      WriteDebugLog(Format('DrawLogo: успешно отрисован - %s, масштаб: %.2f, новый размер: %dx%d',
+        [LogoPath, Scale, NewWidth, NewHeight]));
+
+    except
+      on E: Exception do
+      begin
+        WriteDebugLog('Ошибка отрисовки логотипа: ' + E.Message);
+      end;
+    end;
+  finally
+    PNG.Free;
+  end;
+end;
+
 function TfrmStickyForm.CleanChannelName(const DirtyName: string): string;
 var
   CleanName: string;
-  i: Integer;
 begin
   CleanName := Trim(DirtyName);
 
-  // Убираем все, что похоже на атрибуты (tvg-id=, group-title= и т.д.)
   if Pos('tvg-id=', CleanName) > 0 then
     CleanName := Copy(CleanName, 1, Pos('tvg-id=', CleanName) - 1);
 
@@ -780,10 +767,7 @@ begin
   if Pos('tvg-shift=', CleanName) > 0 then
     CleanName := Copy(CleanName, 1, Pos('tvg-shift=', CleanName) - 1);
 
-  // Убираем двойные пробелы и пробелы в начале/конце
   CleanName := Trim(CleanName);
-
-  // Убираем возможные оставшиеся кавычки
   CleanName := StringReplace(CleanName, '"', '', [rfReplaceAll]);
 
   WriteDebugLog('Очистка названия: "' + DirtyName + '" -> "' + CleanName + '"');
@@ -859,7 +843,7 @@ var
 begin
   Inc(FGeneration);
   FLogoMap.Clear;
-  ResetImageListToNoLogo;
+  // Больше не нужно сбрасывать ImageList
 
   if FEpgUrls = nil then
     FEpgUrls := TStringList.Create;
@@ -1070,46 +1054,7 @@ begin
     Result := idx;
 end;
 
-procedure TfrmStickyForm.ResetImageListToNoLogo;
-var
-  NoLogoPath: string;
-  PNG: TPngImage;
-  BMP: TBitmap;
-begin
-  if ilLogos <> nil then
-    ilLogos.Clear;
 
-  NoLogoPath := FCacheDir + 'NoLogo.png';
-
-  BMP := TBitmap.Create;
-  try
-    BMP.SetSize(ilLogos.Width, ilLogos.Height);
-    BMP.PixelFormat := pf32bit;
-    BMP.AlphaFormat := afDefined;
-    if FileExists(NoLogoPath) then
-    begin
-      PNG := TPngImage.Create;
-      try
-        PNG.LoadFromFile(NoLogoPath);
-        BMP.Canvas.StretchDraw(Rect(0, 0, ilLogos.Width - 1, ilLogos.Height - 1), PNG);
-      finally
-        PNG.Free;
-      end;
-    end
-    else
-    begin
-      BMP.Canvas.Brush.Color := clGray;
-      BMP.Canvas.FillRect(Rect(0, 0, ilLogos.Width, ilLogos.Height));
-      BMP.Canvas.Pen.Color := clRed;
-      BMP.Canvas.MoveTo(0, 0); BMP.Canvas.LineTo(ilLogos.Width, ilLogos.Height);
-      BMP.Canvas.MoveTo(0, ilLogos.Height); BMP.Canvas.LineTo(ilLogos.Width, 0);
-    end;
-    if ilLogos <> nil then
-      ilLogos.Add(BMP, nil);
-  finally
-    BMP.Free;
-  end;
-end;
 
 procedure TfrmStickyForm.EpgStatus;
 var
@@ -1311,13 +1256,9 @@ begin
   FLogoMap := TDictionary<string, Integer>.Create;
   FGeneration := 0;
 
-  ilLogos.Clear;
-  ilLogos.ColorDepth := cd32Bit;
-  ilLogos.Width := 50;
-  ilLogos.Height := 50;
-  ilLogos.DrawingStyle := dsTransparent;
-  ResetImageListToNoLogo;
-
+  // Создаем папку для логотипов
+//  FCacheDir := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin\logo-channels\';
+//  ForceDirectories(FCacheDir); // ← ДОБАВЬТЕ ЭТУ СТРОКУ
 
   if FEpgUrls = nil then
     FEpgUrls := TStringList.Create;
@@ -1338,14 +1279,9 @@ begin
     FEPGStartTimer.Enabled  := True;
   end;
 
-
   DownloadM3UFromURL(frmSettings.edURLM3U.Text);
 
-
   NoLogoPath := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin\logo-channels\NoLogo.png';
-  if FileExists(NoLogoPath) then
-    AddImageFromFileToImageList(NoLogoPath, 'NoLogo');
-
 
   // Сначала путь к библиотеке
   FVlc.LibPath := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin';
@@ -1378,7 +1314,7 @@ end;
 procedure TfrmStickyForm.FormShow(Sender: TObject);
 begin
   lbChannels.Style := lbOwnerDrawFixed;
-  lbChannels.ItemHeight := Max(ilLogos.Height + 4, 80);
+  lbChannels.ItemHeight := 80; // ← ДОБАВЬТЕ ЭТУ СТРОКУ
 
   FCacheDir  := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin\logo-channels\';
   FButtonDir := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin\image-button\';
@@ -1420,6 +1356,9 @@ begin
     FVlc.TopImage.LoadFromFile(FButtonDir + 'volume-mute-player.png');
   end;
     FVlc.Unmute;
+
+  if not Assigned(lbChannels.OnDrawItem) then
+    lbChannels.OnDrawItem := lbChannelsDrawItem;
 end;
 
 procedure TfrmStickyForm.FVlcDblClick(Sender: TObject);
@@ -1543,21 +1482,27 @@ procedure TfrmStickyForm.lbChannelsDrawItem(Control: TWinControl; Index: Integer
 var
   nameLeft: Integer;
   ch: TChannelInfo;
-  logoIdx: Integer;
+  LogoPath: string;
   R: TRect;
   oldFontSize: Integer;
   i: Integer;
   nowDT: TDateTime;
   currEPG, nextEPG: TEPGItem;
   hasCurr: Boolean;
-  logoTop: Integer;
   textColor, grayTextColor: TColor;
   shiftText: string;
   epgStartDT, epgStopDT: TDateTime;
+  LogoRect: TRect;
+  PNG: TPngImage;
+  ScaleX, ScaleY, Scale: Double;
+  NewWidth, NewHeight: Integer;
+  X, Y: Integer;
+  DestRect: TRect;
 begin
   if (Index < 0) or (Index >= FChannels.Count) then Exit;
 
   ch := FChannels[Index];
+  WriteDebugLog('lbChannelsDrawItem: отрисовка канала ' + ch.Name + ' (индекс ' + IntToStr(Index) + ')');
 
   // Определяем цвета текста
   if odSelected in State then
@@ -1575,28 +1520,73 @@ begin
 
   lbChannels.Canvas.FillRect(Rect);
 
-  // Поиск логотипа (оставляем без изменений)
-  logoIdx := -1;
-  if lbChannels.Items.Objects[Index] <> nil then
-    logoIdx := Integer(NativeInt(lbChannels.Items.Objects[Index]));
+  // Получаем путь к логотипу
+  LogoPath := GetLogoFilePath(ch);
+  WriteDebugLog('lbChannelsDrawItem: путь к логотипу - ' + LogoPath);
 
-  if (logoIdx < 0) and (ch.TVGID <> '') then
-    if not FLogoMap.TryGetValue(ch.TVGID, logoIdx) then
-      logoIdx := -1;
+  if (LogoPath = '') or not FileExists(LogoPath) then
+  begin
+    LogoPath := FCacheDir + 'NoLogo.png'; // Дефолтный логотип
+    WriteDebugLog('lbChannelsDrawItem: используется дефолтный логотип');
+  end;
 
-  if logoIdx < 0 then
-    if not FLogoMap.TryGetValue('NoLogo', logoIdx) then
-      logoIdx := -1;
+  // Отрисовываем логотип с правильным масштабированием
+  LogoRect := Rect;
+  LogoRect.Right := LogoRect.Left + 50; // Фиксированная ширина для логотипа
+  LogoRect.Bottom := LogoRect.Top + 50; // Фиксированная высота для логотипа
 
-  // Центрируем логотип
-  logoTop := Rect.Top + (Rect.Bottom - Rect.Top - ilLogos.Height) div 2;
-  if logoTop < Rect.Top + 2 then
-    logoTop := Rect.Top + 2;
+  // Центрируем по вертикали
+  LogoRect.Top := Rect.Top + (Rect.Bottom - Rect.Top - 50) div 2;
+  if LogoRect.Top < Rect.Top + 2 then
+    LogoRect.Top := Rect.Top + 2;
+  LogoRect.Bottom := LogoRect.Top + 50;
 
-  if logoIdx >= 0 then
-    ilLogos.Draw(lbChannels.Canvas, Rect.Left + 4, logoTop, logoIdx);
+  // ПРАВИЛЬНОЕ МАСШТАБИРОВАНИЕ PNG с сохранением качества
+  if FileExists(LogoPath) then
+  begin
+    PNG := TPngImage.Create;
+    try
+      try
+        PNG.LoadFromFile(LogoPath);
 
-  nameLeft := Rect.Left + ilLogos.Width + 8;
+        // Рассчитываем масштаб для сохранения пропорций
+        ScaleX := (LogoRect.Right - LogoRect.Left) / PNG.Width;
+        ScaleY := (LogoRect.Bottom - LogoRect.Top) / PNG.Height;
+        Scale := Min(ScaleX, ScaleY); // Используем минимальный масштаб для сохранения пропорций
+
+        NewWidth := Round(PNG.Width * Scale);
+        NewHeight := Round(PNG.Height * Scale);
+
+        // Центрируем изображение
+        X := LogoRect.Left + ((LogoRect.Right - LogoRect.Left) - NewWidth) div 2;
+        Y := LogoRect.Top + ((LogoRect.Bottom - LogoRect.Top) - NewHeight) div 2;
+
+        // Создаем Rect правильно - используем функцию Rect()
+        DestRect := System.Classes.Rect(X, Y, X + NewWidth, Y + NewHeight);
+
+        // Устанавливаем высокое качество отрисовки
+        SetStretchBltMode(lbChannels.Canvas.Handle, HALFTONE);
+        SetBrushOrgEx(lbChannels.Canvas.Handle, 0, 0, nil);
+
+        // Рисуем PNG напрямую с сохранением прозрачности
+        PNG.Draw(lbChannels.Canvas, DestRect);
+
+        WriteDebugLog(Format('Логотип отмасштабирован: %dx%d -> %dx%d (масштаб: %.2f)',
+          [PNG.Width, PNG.Height, NewWidth, NewHeight, Scale]));
+
+      except
+        on E: Exception do
+        begin
+          WriteDebugLog('Ошибка загрузки логотипа: ' + E.Message);
+        end;
+      end;
+    finally
+      PNG.Free;
+    end;
+  end;
+
+  // Остальной код без изменений...
+  nameLeft := Rect.Left + 50 + 8; // Отступ после логотипа
   oldFontSize := lbChannels.Canvas.Font.Size;
 
   // Название канала
@@ -2377,7 +2367,7 @@ begin
 
     // ПЕРЕНОС В ПОЛНОЭКРАННЫЙ РЕЖИМ
     if wasPlaying then
-      FVlc.Stop;
+      FVlc.Pause;
 
     // Меняем родителя
     FVlc.SetNewParent(aFullScreenForm);
@@ -2408,7 +2398,7 @@ begin
   finally
     // ВОЗВРАТ ИЗ ПОЛНОЭКРАННОГО РЕЖИМА
     if FVlc.IsPlaying then
-      FVlc.Stop;
+      FVlc.Pause;
 
     // Возвращаем на исходную панель
     FVlc.SetNewParent(Panel_VLC_Player);

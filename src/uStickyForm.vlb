@@ -29,9 +29,6 @@ Coordinates=403,144,57,36
 [sbFullScreen]
 Coordinates=303,144,90,36
 
-[ilLogos]
-Coordinates=409,1,56,36
-
 [TimeEpgStatus]
 Coordinates=409,56,102,36
 
@@ -57,5 +54,5 @@ Coordinates=313,10,92,58
 Coordinates=10,144,59,36
 
 []
-Coordinates=42,143,50,36
+Coordinates=409,1,56,36
 

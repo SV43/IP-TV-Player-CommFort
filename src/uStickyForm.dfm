@@ -191,12 +191,6 @@ object frmStickyForm: TfrmStickyForm
       OnClick = N1Click
     end
   end
-  object ilLogos: TImageList
-    Height = 50
-    Width = 50
-    Left = 129
-    Top = 225
-  end
   object PlayerStatus: TTimer
     Enabled = False
     Interval = 100
