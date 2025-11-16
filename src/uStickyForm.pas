@@ -1498,11 +1498,15 @@ var
   NewWidth, NewHeight: Integer;
   X, Y: Integer;
   DestRect: TRect;
+  LeftMargin: Integer; // Добавляем переменную для отступа слева
 begin
   if (Index < 0) or (Index >= FChannels.Count) then Exit;
 
   ch := FChannels[Index];
   WriteDebugLog('lbChannelsDrawItem: отрисовка канала ' + ch.Name + ' (индекс ' + IntToStr(Index) + ')');
+
+  // Определяем отступ слева (в пикселях)
+  LeftMargin := 10; // Можно изменить на нужное значение
 
   // Определяем цвета текста
   if odSelected in State then
@@ -1530,8 +1534,9 @@ begin
     WriteDebugLog('lbChannelsDrawItem: используется дефолтный логотип');
   end;
 
-  // Отрисовываем логотип с правильным масштабированием
+  // Отрисовываем логотип с правильным масштабированием И ОТСТУПОМ СЛЕВА
   LogoRect := Rect;
+  LogoRect.Left := LogoRect.Left + LeftMargin; // ДОБАВЛЯЕМ ОТСТУП СЛЕВА
   LogoRect.Right := LogoRect.Left + 50; // Фиксированная ширина для логотипа
   LogoRect.Bottom := LogoRect.Top + 50; // Фиксированная высота для логотипа
 
@@ -1585,8 +1590,8 @@ begin
     end;
   end;
 
-  // Остальной код без изменений...
-  nameLeft := Rect.Left + 50 + 8; // Отступ после логотипа
+  // Остальной код с учетом отступа слева
+  nameLeft := LogoRect.Right + 8; // Отступ после логотипа (уже с учетом LeftMargin)
   oldFontSize := lbChannels.Canvas.Font.Size;
 
   // Название канала
