@@ -33,6 +33,7 @@ object frmStickyForm: TfrmStickyForm
     Width = 979
     Height = 53
     Align = alBottom
+    ParentBackground = False
     PopupMenu = pmMenu
     TabOrder = 0
     object sbBack: TSpeedButton

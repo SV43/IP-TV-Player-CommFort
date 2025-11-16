@@ -14,5 +14,6 @@ object FullScreenForm: TFullScreenForm
   KeyPreview = True
   Touch.InteractiveGestureOptions = [igoPanSingleFingerHorizontal, igoPanInertia, igoParentPassthrough]
   WindowState = wsMaximized
+  OnClose = FormClose
   TextHeight = 25
 end

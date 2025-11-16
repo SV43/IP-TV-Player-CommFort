@@ -203,7 +203,6 @@ type
     // Методы для видео панели с отступами
     procedure CreateVideoPanel;
     procedure DestroyVideoPanel;
-    procedure UpdateVideoHandle;
     procedure UpdateVideoPanelMargins;
 
     // Методы для текста и изображений
@@ -237,6 +236,7 @@ type
     procedure Pause;
     procedure Stop;
     procedure LoadMedia(const APath: string);
+    procedure UpdateVideoHandle;
 
     // Методы получения состояния
     function IsInitialized: Boolean;

@@ -9,7 +9,7 @@ uses
   System.Win.ScktComp, Vcl.Menus, Vcl.Graphics, PNGImage,
   Vcl.ExtDlgs, System.Generics.Collections, System.IOUtils,
   IdBaseComponent, IdComponent, IdTCPConnection, System.Threading,
-  System.ImageList, Vcl.ImgList, Vlccomponent, Types,
+  System.ImageList, Vcl.ImgList, Types,
   RegularExpressions, System.Net.HttpClientComponent, System.Math,
   uImageTrackBar, uSettings, FullScreenFormUnit, System.ZLib, System.NetEncoding,
   DateUtils, System.Net.HttpClient, Xml.XMLDoc, xmldom, Xml.XMLIntf, Xml.adomxmldom,
@@ -2367,7 +2367,7 @@ begin
 
     // ПЕРЕНОС В ПОЛНОЭКРАННЫЙ РЕЖИМ
     if wasPlaying then
-      FVlc.Pause;
+      FVlc.Stop;
 
     // Меняем родителя
     FVlc.SetNewParent(aFullScreenForm);
@@ -2398,7 +2398,7 @@ begin
   finally
     // ВОЗВРАТ ИЗ ПОЛНОЭКРАННОГО РЕЖИМА
     if FVlc.IsPlaying then
-      FVlc.Pause;
+      FVlc.Stop;
 
     // Возвращаем на исходную панель
     FVlc.SetNewParent(Panel_VLC_Player);
@@ -2509,3 +2509,4 @@ end;
 initialization
 
 end.
+

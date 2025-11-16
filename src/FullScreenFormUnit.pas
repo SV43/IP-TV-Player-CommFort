@@ -10,6 +10,7 @@ uses
 
 type
   TFullScreenForm = class(TForm)
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
   private
     { Private declarations }
     FOnKeyDown: TKeyEvent;
@@ -59,6 +60,12 @@ end;
 procedure TFullScreenForm.AppBarShow(mode: integer);
 begin
 
+end;
+
+procedure TFullScreenForm.FormClose(Sender: TObject; var Action: TCloseAction);
+begin
+//  Action := caFree;
+//  aFullScreenForm := nil;
 end;
 
 end.
