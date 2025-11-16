@@ -117,14 +117,14 @@ type
     procedure StartEPGTimerHandler(Sender: TObject);
     procedure DecompressGZip(const GZipFile, XmlFile: string);
     procedure UseDefaultLogo(const Channel: TChannelInfo);
-    function GetLogoIndexForTVGID(const ATVGID: string): Integer;
-    function ExtractCurrentProgram(const AText: string): string;
+
+
     procedure EpgStatus;
 
 
     function CleanChannelName(const DirtyName: string): string;
     procedure LoadSettings;
-    procedure ParseExistingEPGWithIndex(const XmlFilePath: string; UrlIndex: Integer);
+
     procedure ParseExistingEPG(const XmlFilePath: string; UrlIndex: Integer);
     function MakeSafeFileName(const AText: string): string;
   public
@@ -1361,11 +1361,6 @@ begin
     end;
 end;
 
-function TfrmStickyForm.GetLogoIndexForTVGID(const ATVGID: string): Integer;
-begin
-  if not FLogoMap.TryGetValue(ATVGID, Result) then
-    Result := -1;
-end;
 
 procedure TfrmStickyForm.lbChannelsDrawItem(Control: TWinControl; Index: Integer;
   Rect: TRect; State: TOwnerDrawState);
@@ -1636,37 +1631,7 @@ begin
   end;
 end;
 
-procedure TfrmStickyForm.ParseExistingEPGWithIndex(const XmlFilePath: string; UrlIndex: Integer);
-var
-  MS: TMemoryStream;
-begin
-  WriteDebugLog('ParseExistingEPGWithIndex: ' + XmlFilePath);
 
-  if not FileExists(XmlFilePath) then
-  begin
-    WriteDebugLog('Файл не существует: ' + XmlFilePath);
-    Exit;
-  end;
-
-  MS := TMemoryStream.Create;
-  try
-    try
-      MS.LoadFromFile(XmlFilePath);
-      ParseEPGStream(MS);
-      WriteDebugLog('Успешно распарсен существующий EPG: ' + XmlFilePath);
-    except
-      on E: Exception do
-      begin
-        WriteDebugLog('Ошибка парсинга существующего EPG: ' + E.Message);
-        // Если парсинг существующего файла не удался, скачиваем заново
-        WriteDebugLog('Пробуем скачать EPG заново: ' + FEpgUrls[UrlIndex]);
-        DownloadAndParseEPG(FEpgUrls[UrlIndex]);
-      end;
-    end;
-  finally
-    MS.Free;
-  end;
-end;
 
 procedure TfrmStickyForm.DownloadAndParseAllEPG;
 var
@@ -2361,16 +2326,6 @@ begin
   sbPlay.Update;
 end;
 
-function TfrmStickyForm.ExtractCurrentProgram(const AText: string): string;
-var
-  Lines: TArray<string>;
-begin
-  Lines := AText.Split([sLineBreak]);
-  if Length(Lines) >= 2 then
-    Result := Trim(Lines[1])  // вторая строка = текущая передача
-  else
-    Result := '';
-end;
 
 
 procedure TfrmStickyForm.sbVolumeClick(Sender: TObject);
