@@ -95,13 +95,9 @@ type
     FGeneration: Integer;
 
 
-    procedure DrawLogo(Canvas: TCanvas; const Rect: TRect; const LogoPath: string);
     function GetLogoFilePath(const Channel: TChannelInfo): string;
     procedure QueueDownloadLogo(const Channel: TChannelInfo);
-    function GetLogoIndexForLogoURL(const ALogoURL: string): Integer;
-    function MakeLogoFileName(const Channel: TChannelInfo): string;
 
-    function IsValidPNG(const MS: TMemoryStream): Boolean;
     procedure EPGTimerHandler(Sender: TObject);
 
     procedure SetParentChanName(const Value: WideString);
@@ -288,28 +284,6 @@ begin
 end;
 
 
-function TfrmStickyForm.MakeLogoFileName(const Channel: TChannelInfo): string;
-var
-  base: string;
-begin
-  if Channel.TVGID <> '' then
-    base := Channel.TVGID
-  else if Channel.Name <> '' then
-    base := Channel.Name
-  else
-    base := 'channel';
-
-  base := StringReplace(base, ' ', '_', [rfReplaceAll]);
-  base := StringReplace(base, '/', '_', [rfReplaceAll]);
-  base := StringReplace(base, '\', '_', [rfReplaceAll]);
-  base := StringReplace(base, ':', '_', [rfReplaceAll]);
-  base := StringReplace(base, '?', '_', [rfReplaceAll]);
-  base := StringReplace(base, '&', '_', [rfReplaceAll]);
-  base := StringReplace(base, '"', '_', [rfReplaceAll]);
-
-  Result := base + '.png';
-end;
-
 procedure TfrmStickyForm.ImageTrackBar1Change(Sender: TObject);
 begin
   FVlc.Volume := tvVolume.Position;
@@ -331,24 +305,6 @@ begin
     LoadPNGToControl(FButtonDir + 'volume.png', sbVolume);
 end;
 
-function TfrmStickyForm.IsValidPNG(const MS: TMemoryStream): Boolean;
-var
-  buf: array[0..7] of Byte;
-begin
-  Result := False;
-  if MS.Size < 8 then Exit;
-
-  try
-    MS.Position := 0;
-    MS.ReadBuffer(buf, SizeOf(buf));
-    MS.Position := 0;
-
-    Result := (buf[0] = $89) and (buf[1] = $50) and (buf[2] = $4E) and (buf[3] = $47) and
-              (buf[4] = $0D) and (buf[5] = $0A) and (buf[6] = $1A) and (buf[7] = $0A);
-  except
-    Result := False;
-  end;
-end;
 
 
 
@@ -693,61 +649,7 @@ begin
   end;
 end;
 
-procedure TfrmStickyForm.DrawLogo(Canvas: TCanvas; const Rect: TRect; const LogoPath: string);
-var
-  PNG: TPngImage;
-  ScaleX, ScaleY, Scale: Double;
-  NewWidth, NewHeight: Integer;
-  X, Y: Integer;
-  DestRect: TRect;
-begin
-  if not FileExists(LogoPath) then
-  begin
-    WriteDebugLog('DrawLogo: файл не существует - ' + LogoPath);
-    Exit;
-  end;
 
-  PNG := TPngImage.Create;
-  try
-    try
-      PNG.LoadFromFile(LogoPath);
-      WriteDebugLog('DrawLogo: загружен PNG - ' + LogoPath + ' размер: ' + IntToStr(PNG.Width) + 'x' + IntToStr(PNG.Height));
-
-      // Рассчитываем масштаб для сохранения пропорций
-      ScaleX := (Rect.Right - Rect.Left) / PNG.Width;
-      ScaleY := (Rect.Bottom - Rect.Top) / PNG.Height;
-      Scale := Min(ScaleX, ScaleY); // Используем минимальный масштаб для сохранения пропорций
-
-      NewWidth := Round(PNG.Width * Scale);
-      NewHeight := Round(PNG.Height * Scale);
-
-      // Центрируем изображение
-      X := Rect.Left + ((Rect.Right - Rect.Left) - NewWidth) div 2;
-      Y := Rect.Top + ((Rect.Bottom - Rect.Top) - NewHeight) div 2;
-
-      // Создаем Rect правильно - используем функцию Rect()
-      DestRect := System.Classes.Rect(X, Y, X + NewWidth, Y + NewHeight);
-
-      // Устанавливаем высокое качество отрисовки
-      SetStretchBltMode(Canvas.Handle, HALFTONE);
-      SetBrushOrgEx(Canvas.Handle, 0, 0, nil);
-
-      // Рисуем PNG напрямую с сохранением прозрачности
-      PNG.Draw(Canvas, DestRect);
-
-      WriteDebugLog(Format('DrawLogo: успешно отрисован - %s, масштаб: %.2f, новый размер: %dx%d',
-        [LogoPath, Scale, NewWidth, NewHeight]));
-
-    except
-      on E: Exception do
-      begin
-        WriteDebugLog('Ошибка отрисовки логотипа: ' + E.Message);
-      end;
-    end;
-  finally
-    PNG.Free;
-  end;
-end;
 
 function TfrmStickyForm.CleanChannelName(const DirtyName: string): string;
 var
@@ -1040,19 +942,7 @@ begin
             (Screen.ActiveForm.BorderStyle = bsNone);
 end;
 
-function TfrmStickyForm.GetLogoIndexForLogoURL(const ALogoURL: string): Integer;
-var
-  idx: Integer;
-  key: string;
-begin
-  Result := 0;
-  if (ALogoURL = '') or (FLogoMap = nil) then
-    Exit;
 
-  key := AnsiLowerCase(ALogoURL);
-  if FLogoMap.TryGetValue(key, idx) then
-    Result := idx;
-end;
 
 
 
