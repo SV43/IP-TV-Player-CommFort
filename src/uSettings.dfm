@@ -18,7 +18,7 @@ object frmSettings: TfrmSettings
     Top = 0
     Width = 388
     Height = 364
-    ActivePage = tsSettings
+    ActivePage = tsAbout
     Align = alClient
     TabOrder = 0
     object tsSettings: TTabSheet
@@ -229,7 +229,7 @@ object frmSettings: TfrmSettings
         Top = 16
         Width = 235
         Height = 18
-        Caption = 'IPTV-Plugin Version 2.1.0 Final'
+        Caption = 'IPTV-Plugin Version 2.1.1 Final'
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clWindowText
         Font.Height = -15

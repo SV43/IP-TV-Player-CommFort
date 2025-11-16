@@ -278,7 +278,7 @@ begin
   end
   else if (dwID = 2810) then
   begin
-    uName := 'IPTV Plugin 2.1.0 Final';
+    uName := 'IPTV Plugin 2.1.1 Final';
     iSize := Length(uName) * 2 + 4;
     if (dwOutBufferSize = 0) then
       Result := iSize
@@ -461,11 +461,11 @@ begin
       frmStickyForm.Show;
       FixWindowPos(frmStickyForm);
 
-      DebugMsg('Ôîðìà ïðèêðåïëåíà ê ' + ChanName);
+      DebugMsg('Форма прикреплена к ' + ChanName);
     end;
   except
     on E: Exception do
-      DebugMsg('Îøèáêà â ppUserEnterChannel: ' + E.Message);
+      DebugMsg('Ошибка в ppUserEnterChannel: ' + E.Message);
   end;
 end;
 
