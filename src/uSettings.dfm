@@ -18,7 +18,7 @@ object frmSettings: TfrmSettings
     Top = 0
     Width = 388
     Height = 364
-    ActivePage = tsAbout
+    ActivePage = tsSettings
     Align = alClient
     TabOrder = 0
     object tsSettings: TTabSheet

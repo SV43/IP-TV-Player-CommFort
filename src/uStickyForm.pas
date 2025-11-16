@@ -363,7 +363,7 @@ begin
     InStream.Position := 0;
     pngIn.LoadFromStream(InStream);
 
-    bmp.PixelFormat := pf32bit;
+    bmp.PixelFormat := pf8bit;
     bmp.AlphaFormat := afDefined; // обязательно для прозрачности
     bmp.SetSize(NewWidth, NewHeight);
 
@@ -1204,7 +1204,7 @@ end;
 procedure TfrmStickyForm.FormShow(Sender: TObject);
 begin
   lbChannels.Style := lbOwnerDrawFixed;
-  lbChannels.ItemHeight := 80; // ← ДОБАВЬТЕ ЭТУ СТРОКУ
+  lbChannels.ItemHeight := 80;
 
   FCacheDir  := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin\logo-channels\';
   FButtonDir := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin\image-button\';
@@ -1245,7 +1245,6 @@ begin
 
     FVlc.TopImage.LoadFromFile(FButtonDir + 'volume-mute-player.png');
   end;
-    FVlc.Unmute;
 
   if not Assigned(lbChannels.OnDrawItem) then
     lbChannels.OnDrawItem := lbChannelsDrawItem;
