@@ -331,6 +331,7 @@ begin
 
     bmp.PixelFormat := pf32bit;
     bmp.AlphaFormat := afDefined;
+
     bmp.SetSize(NewWidth, NewHeight);
 
     bmp.Canvas.StretchDraw(Rect(0, 0, NewWidth, NewHeight), pngIn);
@@ -1200,7 +1201,6 @@ begin
 
     FVlc.TopImagePath := FButtonDir + 'volume-mute-player.png';
   end;
-    FVlc.Unmute;
 
   if not Assigned(lbChannels.OnDrawItem) then
     lbChannels.OnDrawItem := lbChannelsDrawItem;
