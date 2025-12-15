@@ -278,7 +278,7 @@ begin
   end
   else if (dwID = 2810) then
   begin
-    uName := 'IPTV Plugin 2.1.1 Final';
+    uName := 'IPTV Plugin 2.1.2 Final';
     iSize := Length(uName) * 2 + 4;
     if (dwOutBufferSize = 0) then
       Result := iSize

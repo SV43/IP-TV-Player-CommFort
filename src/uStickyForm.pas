@@ -14,6 +14,7 @@ uses
   uImageTrackBar, uSettings, FullScreenFormUnit, System.ZLib, System.NetEncoding,
   DateUtils, System.Net.HttpClient, Xml.XMLDoc, xmldom, Xml.XMLIntf, Xml.adomxmldom,
   NativeXml, VlcVisualComponent, IniFiles, FileDownloader;
+
 type
   TEPGItem = record
     Title: string;
@@ -24,6 +25,7 @@ type
   TChannelInfo = class
   private
     FCustomAttributes: TStringList;
+    FAspectRatio: string;
   public
     Name: string;
     TVGID: string;
@@ -31,7 +33,6 @@ type
     StreamURL: string;
     TVGShift: Integer;
     GroupTitle: string;
-    // EPG fields (history)
     CurrentTitle: string;
     CurrentStart: TDateTime;
     CurrentStop: TDateTime;
@@ -40,6 +41,7 @@ type
     constructor Create;
     destructor Destroy; override;
     property CustomAttributes: TStringList read FCustomAttributes write FCustomAttributes;
+    property AspectRatio: string read FAspectRatio write FAspectRatio;
   end;
 
 type
@@ -89,22 +91,17 @@ type
     procedure FVlcVideoDblClick(Sender: TObject);
   private
     FChannels: TList<TChannelInfo>;
-    FLogoMap: TDictionary<string, Integer>; // ключ = LowerCase(LogoURL)
+    FLogoMap: TDictionary<string, Integer>;
     FParentChanName: WideString;
     FParentChanHandle: HWND;
     FGeneration: Integer;
 
-
     function GetLogoFilePath(const Channel: TChannelInfo): string;
     procedure QueueDownloadLogo(const Channel: TChannelInfo);
-
     procedure EPGTimerHandler(Sender: TObject);
-
     procedure SetParentChanName(const Value: WideString);
     procedure SetParentChanHandle(const Value: HWND);
-    { Private declarations }
     procedure PlayChannelByIndex(AIndex: Integer);
-
     procedure LoadEPGUrlsFromM3ULine(const Line: string);
     procedure DownloadAndParseAllEPG;
     procedure DownloadAndParseEPG(const AUrl: string);
@@ -112,20 +109,13 @@ type
     function ParseXMLTVDate(const S: string): TDateTime;
     procedure ClearCurrentPrograms;
     procedure RefreshCurrentPrograms;
-
-    // new: delayed EPG start timer
     procedure StartEPGTimerHandler(Sender: TObject);
     procedure DecompressGZip(const GZipFile, XmlFile: string);
     procedure UseDefaultLogo(const Channel: TChannelInfo);
-
-
     procedure EpgStatus;
-
-
     function CleanChannelName(const DirtyName: string): string;
     procedure LoadSettings;
-
-    procedure ParseExistingEPG(const XmlFilePath: string; UrlIndex: Integer);
+    procedure ParseExistingEPG(const XmlFilePath, AUrl: string);
     function MakeSafeFileName(const AText: string): string;
   public
     FStopRequested: Boolean;
@@ -140,7 +130,6 @@ type
     procedure VolumeUp;
     procedure VolumeDown;
     procedure DownloadM3UFromURL(const URL: string);
-    { Public declarations }
   end;
 
 var
@@ -149,7 +138,7 @@ var
   IsFullScreen: Boolean;
   FEpgUrls: TStringList;
   FEPGTimer: TTimer;
-  FEPGStartTimer: TTimer; // timer to delay EPG start
+  FEPGStartTimer: TTimer;
   FButtonDir: String;
   FimageChan:String;
   aFullScreenForm: TFullScreenForm;
@@ -160,15 +149,12 @@ implementation
 
 uses uPlugin;
 
-
-
-
-
 constructor TChannelInfo.Create;
 begin
   inherited;
   EPG := TList<TEPGItem>.Create;
   FCustomAttributes := TStringList.Create;
+  FAspectRatio := '';
 end;
 
 destructor TChannelInfo.Destroy;
@@ -177,32 +163,6 @@ begin
   FCustomAttributes.Free;
   inherited;
 end;
-
-
-procedure WriteDebugLog(const Msg: string);
-var
-  LogFile: TextFile;
-  LogPath: string;
-begin
-  try
-    // пишем рядом с остальными данными (папка из настроек)
-    LogPath := path + 'IPTV_Plugin\debug.log';
-    if frmSettings.cbLog.Checked then
-    begin
-      AssignFile(LogFile, LogPath);
-      if FileExists(LogPath) then
-        Append(LogFile)
-      else
-         Rewrite(LogFile);
-        Writeln(LogFile, FormatDateTime('[dd.mm.yyyy hh:nn:ss]', Now) + ' - ' + Msg);
-        CloseFile(LogFile);
-    end;
-  except
-    // не даём логированию упасть
-  end;
-end;
-
-
 
 procedure LoadPNGToControl(const FileName: string; Control: TControl);
 var
@@ -264,30 +224,33 @@ begin
     Exit;
 
   Channel := FChannels[AIndex];
-  WriteDebugLog('--- Воспроизведение канала: ' + Channel.Name + ' ---');
-  WriteDebugLog('URL: ' + Channel.StreamURL);
 
   if Channel.StreamURL = '' then
     Exit;
 
   try
-    WriteDebugLog('Запуск потока...');
     FVlc.LoadMedia(Channel.StreamURL);
     PlayerStatus.Enabled := Enabled;
     FVlc.Play;
+
+    // Обновляем текст EPG сразу после запуска воспроизведения
+    TThread.Synchronize(nil,
+      procedure
+      begin
+        EpgStatus;
+      end);
   except
     on E: Exception do
     begin
-      WriteDebugLog('Ошибка воспроизведения: ' + E.Message);
     end;
   end;
 end;
-
 
 procedure TfrmStickyForm.ImageTrackBar1Change(Sender: TObject);
 begin
   FVlc.Volume := tvVolume.Position;
   FVlc.SetDisplayText('Громкость ' + IntToStr(tvVolume.Position) + '%');
+  FVlc.SetDisplayTextVisible(True);
   FVlc.ShowTopImage := False;
 
   if FVlc.IsMuted then
@@ -303,13 +266,23 @@ begin
   end
   else
     LoadPNGToControl(FButtonDir + 'volume.png', sbVolume);
+
+  // Автоматически скрываем текст через 2 секунды
+  TThread.CreateAnonymousThread(
+    procedure
+    begin
+      Sleep(2000);
+      TThread.Synchronize(nil,
+        procedure
+        begin
+          if FVlc.Volume = tvVolume.Position then // Проверяем, что громкость не изменилась
+          begin
+            FVlc.SetDisplayTextVisible(False);
+            FVlc.Invalidate;
+          end;
+        end);
+    end).Start;
 end;
-
-
-
-
-
-
 
 procedure TfrmStickyForm.UseDefaultLogo(const Channel: TChannelInfo);
 var
@@ -320,16 +293,13 @@ begin
 
   if FileExists(DefaultLogoPath) then
   begin
-    // Для старого TDictionary используем Integer как индекс
-    // Предполагаем, что -1 означает "нет логотипа"
-    LogoIndex := 0; // или любое другое значение, которое вы используете для дефолтного лого
+    LogoIndex := 0;
 
     try
       FLogoMap.Add(Channel.TVGID, LogoIndex);
     except
       on E: EListError do
       begin
-        // Игнорируем ошибку дубликата ключа
       end;
     end;
 
@@ -343,10 +313,6 @@ begin
           lbChannels.Invalidate;
       end
     );
-  end
-  else
-  begin
-    WriteDebugLog('Дефолтный логотип не найден: ' + DefaultLogoPath);
   end;
 end;
 
@@ -364,7 +330,7 @@ begin
     pngIn.LoadFromStream(InStream);
 
     bmp.PixelFormat := pf32bit;
-    bmp.AlphaFormat := afDefined; // обязательно для прозрачности
+    bmp.AlphaFormat := afDefined;
     bmp.SetSize(NewWidth, NewHeight);
 
     bmp.Canvas.StretchDraw(Rect(0, 0, NewWidth, NewHeight), pngIn);
@@ -398,8 +364,6 @@ begin
     Result := Copy(Result, 1, 100);
 end;
 
-
-
 function GetFileSize(const AFileName: string): Int64;
 var
   SR: TSearchRec;
@@ -412,8 +376,6 @@ begin
   end;
 end;
 
-
-
 procedure TfrmStickyForm.QueueDownloadLogo(const Channel: TChannelInfo);
 var
   DestPath, FileName, LogoDir: string;
@@ -423,16 +385,8 @@ var
 begin
   LogoDir := path + 'IPTV_Plugin\logo-channels\';
 
-  WriteDebugLog('=== НАЧАЛО ЗАГРУЗКИ ЛОГОТИПА ===');
-  WriteDebugLog('Канал: ' + Channel.Name);
-  WriteDebugLog('TVGID: ' + Channel.TVGID);
-  WriteDebugLog('LogoURL: ' + Channel.LogoURL);
-
   if lbChannels.Items.IndexOf(Channel.Name) < 0 then
-  begin
-    WriteDebugLog('❌ Канал не найден в списке');
     Exit;
-  end;
 
   if Channel.TVGID <> '' then
     FileName := MakeSafeFileName(Channel.TVGID) + '.png'
@@ -440,14 +394,9 @@ begin
     FileName := MakeSafeFileName(Channel.Name) + '.png';
 
   DestPath := TPath.Combine(LogoDir, FileName);
-  WriteDebugLog('Полный путь: ' + DestPath);
 
-  // ПРОВЕРКА НА СУЩЕСТВОВАНИЕ В КЭШЕ
   if FileExists(DestPath) then
   begin
-    WriteDebugLog('✅ Логотип уже существует в кэше');
-
-    // Используем индекс 1 для существующих логотипов
     LogoIndex := 1;
 
     try
@@ -455,7 +404,6 @@ begin
     except
       on E: EListError do
       begin
-        // Игнорируем ошибку дубликата ключа
       end;
     end;
 
@@ -475,19 +423,16 @@ begin
   SafeLogoURL := Trim(Channel.LogoURL);
   if (SafeLogoURL = '') then
   begin
-    WriteDebugLog('❌ URL логотипа пустой');
     UseDefaultLogo(Channel);
     Exit;
   end;
 
   if not (SafeLogoURL.StartsWith('http://', True) or SafeLogoURL.StartsWith('https://', True)) then
   begin
-    WriteDebugLog('❌ Неверный URL логотипа: ' + SafeLogoURL);
     UseDefaultLogo(Channel);
     Exit;
   end;
 
-  WriteDebugLog('🚀 Запускаем скачивание через FileDownloader: ' + SafeLogoURL);
   localGen := FGeneration;
 
   TThread.CreateAnonymousThread(
@@ -503,15 +448,10 @@ begin
       try
         Downloader := TFileDownloader.CreateWithPath(LogoDir);
         try
-          WriteDebugLog('📥 Скачиваем через FileDownloader: ' + SafeLogoURL);
-
           LocalFile := Downloader.EnsureFileAvailableEx(SafeLogoURL, WasDownloaded);
 
           if LocalFile <> '' then
           begin
-            WriteDebugLog('✅ FileDownloader успешно скачал: ' + LocalFile);
-            WriteDebugLog('📊 Было скачано: ' + BoolToStr(WasDownloaded, True));
-
             Success := True;
 
             if not SameText(LocalFile, DestPath) then
@@ -520,24 +460,14 @@ begin
                 if FileExists(DestPath) then
                   DeleteFile(DestPath);
                 if RenameFile(LocalFile, DestPath) then
-                begin
-                  WriteDebugLog('✅ Файл переименован в: ' + DestPath);
                   LocalFile := DestPath;
-                end
-                else
-                begin
-                  WriteDebugLog('⚠️ Не удалось переименовать файл, используем оригинальный путь');
-                end;
               except
                 on E: Exception do
-                  WriteDebugLog('⚠️ Ошибка переименования: ' + E.Message);
+                begin
+                end;
               end;
             end;
           end
-          else
-          begin
-            WriteDebugLog('❌ FileDownloader не смог скачать файл');
-          end;
 
         finally
           Downloader.Free;
@@ -546,21 +476,18 @@ begin
       except
         on E: Exception do
         begin
-          WriteDebugLog('💥 Ошибка в FileDownloader: ' + E.Message);
         end;
       end;
 
-      // ОБНОВЛЯЕМ ИНТЕРФЕЙС
       if Success then
       begin
-        LogoIndex := 1; // индекс для скачанных логотипов
+        LogoIndex := 1;
 
         try
           FLogoMap.Add(Channel.TVGID, LogoIndex);
         except
           on E: EListError do
           begin
-            // Игнорируем ошибку дубликата ключа
           end;
         end;
 
@@ -570,17 +497,12 @@ begin
             if localGen = FGeneration then
             begin
               try
-                WriteDebugLog('🔄 Обновляем UI для: ' + Channel.Name);
                 var idx := lbChannels.Items.IndexOf(Channel.Name);
                 if idx >= 0 then
-                begin
                   lbChannels.Invalidate;
-                  WriteDebugLog('✅ Логотип добавлен для: ' + Channel.Name);
-                end;
               except
                 on E: Exception do
                 begin
-                  WriteDebugLog('💥 Ошибка обновления UI: ' + E.Message);
                   UseDefaultLogo(Channel);
                 end;
               end;
@@ -590,7 +512,6 @@ begin
       end
       else
       begin
-        WriteDebugLog('❌ Не удалось загрузить логотип');
         TThread.Queue(nil,
           procedure
           begin
@@ -598,8 +519,6 @@ begin
           end
         );
       end;
-
-      WriteDebugLog('=== ЗАВЕРШЕНИЕ ПОТОКА ЗАГРУЗКИ ===');
     end
   ).Start;
 end;
@@ -609,47 +528,22 @@ var
   LogoIndex: Integer;
   LogoPath: string;
 begin
-  Result := FCacheDir + 'NoLogo.png'; // значение по умолчанию
+  Result := FCacheDir + 'NoLogo.png';
 
   if FLogoMap.TryGetValue(Channel.TVGID, LogoIndex) then
   begin
-    WriteDebugLog('GetLogoFilePath: найден индекс ' + IntToStr(LogoIndex) + ' для ' + Channel.TVGID);
-
-    if LogoIndex = 1 then // логотип канала
+    if LogoIndex = 1 then
     begin
-      // Формируем путь к логотипу канала
       if Channel.TVGID <> '' then
         LogoPath := path + 'IPTV_Plugin\logo-channels\' + MakeSafeFileName(Channel.TVGID) + '.png';
 
-      WriteDebugLog('GetLogoFilePath: ищем файл по пути: ' + LogoPath);
-
-      // Проверяем существует ли файл
       if FileExists(LogoPath) then
-      begin
-        Result := LogoPath;
-        WriteDebugLog('GetLogoFilePath: используется кастомный логотип - ' + LogoPath);
-      end
+        Result := LogoPath
       else
-      begin
           Result := FCacheDir + 'NoLogo.png';
-          WriteDebugLog('GetLogoFilePath: кастомный логотип не существует, используется дефолтный');
-          WriteDebugLog('GetLogoFilePath: TVGID: ' + Channel.TVGID);
-          WriteDebugLog('GetLogoFilePath: Name: ' + Channel.Name);
-          WriteDebugLog('GetLogoFilePath: Ожидаемый путь: ' + LogoPath);
-      end;
     end
-    else
-    begin
-      WriteDebugLog('GetLogoFilePath: используется дефолтный логотип (индекс ' + IntToStr(LogoIndex) + ')');
-    end;
-  end
-  else
-  begin
-    WriteDebugLog('GetLogoFilePath: ключ не найден в FLogoMap - ' + Channel.TVGID);
   end;
 end;
-
-
 
 function TfrmStickyForm.CleanChannelName(const DirtyName: string): string;
 var
@@ -672,36 +566,26 @@ begin
   CleanName := Trim(CleanName);
   CleanName := StringReplace(CleanName, '"', '', [rfReplaceAll]);
 
-  WriteDebugLog('Очистка названия: "' + DirtyName + '" -> "' + CleanName + '"');
-
   Result := CleanName;
 end;
 
-procedure TfrmStickyForm.ParseExistingEPG(const XmlFilePath: string; UrlIndex: Integer);
+procedure TfrmStickyForm.ParseExistingEPG(const XmlFilePath, AUrl: string);
 var
   MS: TMemoryStream;
 begin
-  WriteDebugLog('ParseExistingEPG: ' + XmlFilePath + ', индекс: ' + IntToStr(UrlIndex));
-
   if not FileExists(XmlFilePath) then
-  begin
-    WriteDebugLog('Файл не существует: ' + XmlFilePath);
     Exit;
-  end;
 
   MS := TMemoryStream.Create;
   try
     try
       MS.LoadFromFile(XmlFilePath);
       ParseEPGStream(MS);
-      WriteDebugLog('Успешно распарсен существующий EPG: ' + XmlFilePath);
     except
       on E: Exception do
       begin
-        WriteDebugLog('Ошибка парсинга существующего EPG: ' + E.Message);
         // Если парсинг существующего файла не удался, скачиваем заново
-        WriteDebugLog('Пробуем скачать EPG заново: ' + FEpgUrls[UrlIndex]);
-        DownloadAndParseEPG(FEpgUrls[UrlIndex]);
+        DownloadAndParseEPG(AUrl);
       end;
     end;
   finally
@@ -742,10 +626,10 @@ var
   SkipChannel: Boolean;
   CurrentExtGrp: string;
   FoundExtGrp: string;
+  AspectRatio: string;
 begin
   Inc(FGeneration);
   FLogoMap.Clear;
-  // Больше не нужно сбрасывать ImageList
 
   if FEpgUrls = nil then
     FEpgUrls := TStringList.Create;
@@ -753,7 +637,6 @@ begin
 
   lbChannels.Items.BeginUpdate;
   try
-    // очищаем старые каналы
     for i := 0 to FChannels.Count - 1 do
       FChannels[i].Free;
     FChannels.Clear;
@@ -763,7 +646,6 @@ begin
     try
       SL.LoadFromFile(FileName, TEncoding.UTF8);
 
-      // ищем заголовок #EXTM3U
       for i := 0 to SL.Count - 1 do
       begin
         HeaderLine := Trim(SL[i]);
@@ -782,32 +664,28 @@ begin
       begin
         Line := Trim(SL[i]);
 
-        // пропускаем пустые строки
         if Line = '' then
         begin
           Inc(i);
           Continue;
         end;
 
-        // Обрабатываем #EXTGRP перед #EXTINF
         if Line.StartsWith('#EXTGRP:', True) then
         begin
           CurrentExtGrp := Trim(Copy(Line, 9, MaxInt));
-          WriteDebugLog('Найдена группа #EXTGRP: ' + CurrentExtGrp);
           Inc(i);
           Continue;
         end;
 
-        // если нашли #EXTINF — начинаем новый канал
         if Line.StartsWith('#EXTINF', True) then
         begin
           Attrs := TStringList.Create;
           VLCOpts := TStringList.Create;
           SkipChannel := False;
           FoundExtGrp := '';
+          AspectRatio := '';
 
           try
-            // Парсим атрибуты #EXTINF
             Regex := TRegEx.Create('([\w-]+)\s*=\s*("([^"]*)"|([^,\s]+))', [roIgnoreCase]);
             Match := Regex.Match(Line);
             while Match.Success do
@@ -819,16 +697,18 @@ begin
                 Value := Match.Groups[4].Value;
 
               Attrs.Values[Key] := Value;
+
+              if SameText(Key, 'aspect-ratio') or SameText(Key, 'aspectratio') then
+                AspectRatio := Value;
+
               Match := Match.NextMatch;
             end;
 
-            // Проверяем TVG-ID
             if Attrs.Values['tvg-id'] = '' then
             begin
               SkipChannel := True;
             end;
 
-            // Имя канала
             if Pos(',', Line) > 0 then
             begin
               Name := Trim(Copy(Line, Pos(',', Line) + 1, MaxInt));
@@ -839,10 +719,8 @@ begin
 
             TempGroup := Attrs.Values['group-title'];
 
-            // Переходим к следующей строке
             Inc(i);
 
-            // Ищем #EXTGRP и #EXTVLCOPT сразу после #EXTINF
             while (i < SL.Count) do
             begin
               Line := Trim(SL[i]);
@@ -853,7 +731,7 @@ begin
               end;
 
               if not Line.StartsWith('#') then
-                Break; // Дошли до URL
+                Break;
 
               if Line.StartsWith('#EXTGRP:', True) then
               begin
@@ -868,24 +746,44 @@ begin
                   Key := Trim(Copy(Line, 1, Pos('=', Line) - 1));
                   Value := Trim(Copy(Line, Pos('=', Line) + 1, MaxInt));
                   VLCOpts.Values[Key] := Value;
+
+                  if SameText(Key, 'aspect-ratio') or SameText(Key, 'aspectratio') then
+                    AspectRatio := Value;
+                end;
+                Inc(i);
+              end
+              else if Line.StartsWith('#EXT-X-STREAM-INF', True) or
+                      Line.StartsWith('#EXT-X-MEDIA', True) then
+              begin
+                Match := Regex.Match(Line);
+                while Match.Success do
+                begin
+                  Key := Match.Groups[1].Value;
+                  if Match.Groups[3].Value <> '' then
+                    Value := Match.Groups[3].Value
+                  else
+                    Value := Match.Groups[4].Value;
+
+                  if SameText(Key, 'aspect-ratio') or SameText(Key, 'aspectratio') then
+                    AspectRatio := Value;
+
+                  Match := Match.NextMatch;
                 end;
                 Inc(i);
               end
               else
               begin
-                Break; // Другие теги - выходим
+                Break;
               end;
             end;
 
-            // Ищем URL
             StreamURL := 'null';
             if i < SL.Count then
             begin
               StreamURL := Trim(SL[i]);
-              Inc(i); // Переходим после URL
+              Inc(i);
             end;
 
-            // Создаем канал если не пропускаем
             if not SkipChannel then
             begin
               Info := TChannelInfo.Create;
@@ -898,7 +796,8 @@ begin
               Info.CurrentStop := 0;
               Info.TVGShift := StrToIntDef(Attrs.Values['tvg-shift'], 0);
 
-              // Определяем группу
+              Info.AspectRatio := AspectRatio;
+
               if TempGroup <> '' then
                 Info.GroupTitle := TempGroup
               else if FoundExtGrp <> '' then
@@ -911,6 +810,7 @@ begin
               Info.CustomAttributes.Assign(VLCOpts);
               FChannels.Add(Info);
               lbChannels.Items.Add(Info.Name);
+
               QueueDownloadLogo(Info);
             end;
 
@@ -942,10 +842,6 @@ begin
             (Screen.ActiveForm.BorderStyle = bsNone);
 end;
 
-
-
-
-
 procedure TfrmStickyForm.EpgStatus;
 var
   i, j: Integer;
@@ -957,32 +853,40 @@ var
   epgStartDT, epgStopDT: TDateTime;
   foundCurrent: Boolean;
 begin
-  if not FVlc.IsPlaying then
-    Exit;
+  // Отладочное сообщение
+  OutputDebugString(PChar('EpgStatus: начат'));
 
-  // Получаем текущий URL воспроизведения
+  if not FVlc.IsPlaying then
+  begin
+    FVlc.SetDisplayTextVisible(False);
+    OutputDebugString(PChar('EpgStatus: не играет, скрываем текст'));
+    Exit;
+  end;
+
   currentUrl := FVlc.GetCurrentMediaURL;
   if currentUrl = '' then
     currentUrl := FVlc.MediaURL;
 
-  // Ищем канал с этим URL
+  OutputDebugString(PChar('EpgStatus: текущий URL = ' + currentUrl));
+
   ch := nil;
   for i := 0 to FChannels.Count - 1 do
   begin
     if (FChannels[i].StreamURL = currentUrl) then
     begin
       ch := FChannels[i];
+      OutputDebugString(PChar('EpgStatus: найден канал = ' + ch.Name));
       Break;
     end;
   end;
 
   if not Assigned(ch) then
   begin
-    OutputDebugString(PChar('Канал не найден для URL: ' + currentUrl));
+    FVlc.SetDisplayTextVisible(False);
+    OutputDebugString(PChar('EpgStatus: канал не найден'));
     Exit;
   end;
 
-  // ПРАВИЛЬНО: Ищем текущую программу с учетом TVGShift
   nowDT := Now;
   foundCurrent := False;
   cur := 'Нет актуальных данных';
@@ -990,45 +894,47 @@ begin
 
   if Assigned(ch.EPG) then
   begin
+    OutputDebugString(PChar('EpgStatus: EPG канала содержит ' + IntToStr(ch.EPG.Count) + ' записей'));
+
     for j := 0 to ch.EPG.Count - 1 do
     begin
-      // Применяем смещение к временам EPG программ
       epgStartDT := IncHour(ch.EPG[j].StartDT, ch.TVGShift);
       epgStopDT := IncHour(ch.EPG[j].StopDT, ch.TVGShift);
 
-      // Ищем по реальному текущему времени
       if (epgStartDT <= nowDT) and (epgStopDT > nowDT) then
       begin
         cur := ch.EPG[j].Title;
-        // Формируем диапазон времени из СДВИНУТЫХ времен
         timeRange := FormatDateTime('hh:nn', epgStartDT) + ' - ' +
                      FormatDateTime('hh:nn', epgStopDT);
         foundCurrent := True;
 
-        // Обновляем информацию о текущей программе в канале
         ch.CurrentTitle := cur;
         ch.CurrentStart := epgStartDT;
         ch.CurrentStop := epgStopDT;
+
+        OutputDebugString(PChar('EpgStatus: найдена текущая программа = ' + cur));
         Break;
       end;
     end;
+  end
+  else
+  begin
+    OutputDebugString(PChar('EpgStatus: у канала нет данных EPG'));
   end;
 
-  // Если не нашли текущую программу
   if not foundCurrent then
   begin
     ch.CurrentTitle := '';
     ch.CurrentStart := 0;
     ch.CurrentStop := 0;
+    OutputDebugString(PChar('EpgStatus: текущая программа не найдена'));
   end;
 
-  // Очищаем название от времени в скобках (если оно там есть)
   var cleanTitle := cur;
   var p := Pos('(', cleanTitle);
   if p > 0 then
     cleanTitle := Trim(Copy(cleanTitle, 1, p - 1));
 
-  // Формируем текст для отображения
   var displayText: string;
   if foundCurrent then
   begin
@@ -1061,28 +967,68 @@ begin
     end;
   end;
 
+  // ОСНОВНОЕ ИСПРАВЛЕНИЕ: устанавливаем текст и делаем его видимым
   FVlc.SetDisplayText(displayText);
-end;
+  FVlc.SetDisplayTextVisible(True);
 
+  // Настраиваем стиль текста
+  FVlc.SetDisplayTextStyle(
+    14,                    // Размер шрифта
+    clWhite,              // Цвет текста
+    $80202020,            // Полупрозрачный черный фон
+    220,                  // Alpha канал
+    8                     // Закругление
+  );
+
+  OutputDebugString(PChar('EpgStatus: установлен текст = ' + displayText));
+
+  // Принудительное обновление отображения
+  FVlc.Invalidate;
+
+  // Дополнительное обновление через короткую задержку для надежности
+  TThread.CreateAnonymousThread(
+    procedure
+    begin
+      Sleep(100);
+      TThread.Synchronize(nil,
+        procedure
+        begin
+          FVlc.Invalidate;
+        end);
+    end).Start;
+end;
 
 procedure TfrmStickyForm.OnPlaying(Sender: TObject);
 begin
+  OutputDebugString(PChar('OnPlaying: начал играть'));
   EpgStatus;
+
+  // Дополнительное обновление интерфейса
+  if FVlc.HandleAllocated then
+  begin
+    FVlc.Invalidate;
+    FVlc.Update;
+    Invalidate;
+  end;
 end;
 
 procedure TfrmStickyForm.OnBuffering(Sender: TObject; cache: Single);
 begin
   if Trunc(cache) < 100 then
+    OutputDebugString(PChar('OnBuffering: буферизация ' + FloatToStr(cache)))
   else
+  begin
+    OutputDebugString(PChar('OnBuffering: буферизация завершена'));
     EpgStatus;
+  end;
 end;
 
 procedure TfrmStickyForm.OnError(Sender: TObject);
 begin
+  OutputDebugString(PChar('OnError: ошибка воспроизведения'));
   LoadPNGToControl(FButtonDir + 'play.png', sbPlay);
+  FVlc.SetDisplayTextVisible(False);
 end;
-
-
 
 procedure TfrmStickyForm.N1Click(Sender: TObject);
 begin
@@ -1102,7 +1048,6 @@ begin
     Ini.Free;
   end;
 end;
-
 
 procedure TfrmStickyForm.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
 begin
@@ -1146,17 +1091,13 @@ begin
   FLogoMap := TDictionary<string, Integer>.Create;
   FGeneration := 0;
 
-  // Создаем папку для логотипов
-//  FCacheDir := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin\logo-channels\';
-//  ForceDirectories(FCacheDir); // ← ДОБАВЬТЕ ЭТУ СТРОКУ
-
   if FEpgUrls = nil then
     FEpgUrls := TStringList.Create;
 
   if FEPGTimer = nil then
   begin
     FEPGTimer := TTimer.Create(Self);
-    FEPGTimer.Interval := 15 * 60 * 1000; // 15 минут
+    FEPGTimer.Interval := 15 * 60 * 1000;
     FEPGTimer.OnTimer  := EPGTimerHandler;
     FEPGTimer.Enabled  := True;
   end;
@@ -1164,7 +1105,7 @@ begin
   if FEPGStartTimer = nil then
   begin
     FEPGStartTimer := TTimer.Create(Self);
-    FEPGStartTimer.Interval := 2000; // 2 секунды
+    FEPGStartTimer.Interval := 2000;
     FEPGStartTimer.OnTimer  := StartEPGTimerHandler;
     FEPGStartTimer.Enabled  := True;
   end;
@@ -1173,18 +1114,33 @@ begin
 
   NoLogoPath := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin\logo-channels\NoLogo.png';
 
-  // Сначала путь к библиотеке
   FVlc.LibPath := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin';
   FVlc.ShowTopImage := False;
-  FVlc.EnableMouseEvents;
-end;
 
+  // Инициализация текста EPG
+  FVlc.SetDisplayTextVisible(True);
+  FVlc.SetDisplayText('Загрузка...');
+
+  // Настройка стиля по умолчанию для текста EPG
+  FVlc.SetDisplayTextStyle(
+    14,                    // Размер шрифта
+    clWhite,              // Цвет текста
+    $80202020,            // Полупрозрачный черный фон
+    220,                  // Прозрачность
+    8                     // Закругление
+  );
+
+  // Настройка интервалов таймеров
+  TimeEpgStatus.Interval := 30000;  // Обновление EPG каждые 30 секунд
+  PlayerStatus.Interval := 1000;    // Статус плеера каждую секунду
+
+  OutputDebugString(PChar('FormCreate: TVlcPlayer инициализирован'));
+end;
 
 procedure TfrmStickyForm.FormDestroy(Sender: TObject);
 var
   i: Integer;
 begin
-  // сначала освободим все каналы
   if Assigned(FChannels) then
   begin
     for i := 0 to FChannels.Count - 1 do
@@ -1194,7 +1150,6 @@ begin
 
   FreeAndNil(FLogoMap);
 
-  // cleanup timers if any
   FreeAndNil(FEPGTimer);
   FreeAndNil(FEPGStartTimer);
   FreeAndNil(FullScreenForm);
@@ -1204,7 +1159,7 @@ end;
 procedure TfrmStickyForm.FormShow(Sender: TObject);
 begin
   lbChannels.Style := lbOwnerDrawFixed;
-  lbChannels.ItemHeight := 80; // ← ДОБАВЬТЕ ЭТУ СТРОКУ
+  lbChannels.ItemHeight := 80;
 
   FCacheDir  := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin\logo-channels\';
   FButtonDir := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin\image-button\';
@@ -1243,12 +1198,19 @@ begin
        else
        LoadPNGToControl(FButtonDir + 'volume.png', sbVolume);
 
-    FVlc.TopImage.LoadFromFile(FButtonDir + 'volume-mute-player.png');
+    FVlc.TopImagePath := FButtonDir + 'volume-mute-player.png';
   end;
     FVlc.Unmute;
 
   if not Assigned(lbChannels.OnDrawItem) then
     lbChannels.OnDrawItem := lbChannelsDrawItem;
+
+  // Тестовый вывод текста при показе формы
+  FVlc.SetDisplayText('Тест: Форма показана');
+  FVlc.SetDisplayTextVisible(True);
+  FVlc.Invalidate;
+
+  OutputDebugString(PChar('FormShow: форма показана, тестовый текст установлен'));
 end;
 
 procedure TfrmStickyForm.FVlcDblClick(Sender: TObject);
@@ -1279,24 +1241,24 @@ end;
 
 procedure TfrmStickyForm.EPGTimerHandler(Sender: TObject);
 begin
-  // use anonymous thread for periodic EPG refresh (safer in DLL)
+  OutputDebugString(PChar('EPGTimerHandler: обновление EPG по таймеру'));
   TThread.CreateAnonymousThread(
     procedure
     begin
       DownloadAndParseAllEPG;
     end).Start;
-
 end;
 
 procedure TfrmStickyForm.StartEPGTimerHandler(Sender: TObject);
 begin
+  OutputDebugString(PChar('StartEPGTimerHandler: запуск первого обновления EPG'));
+
   if Assigned(FEPGStartTimer) then
   begin
     FEPGStartTimer.Enabled := False;
     FreeAndNil(FEPGStartTimer);
   end;
 
-  // start download in a thread (so UI not blocked)
   TThread.CreateAnonymousThread(
     procedure
     begin
@@ -1304,34 +1266,33 @@ begin
     end).Start;
 end;
 
-
-
 procedure TfrmStickyForm.TimeEpgStatusTimer(Sender: TObject);
 begin
   if FVlc.IsPlaying then
-   EpgStatus else
-   FVlc.SetDisplayText('');
+  begin
+    OutputDebugString(PChar('TimeEpgStatusTimer: обновление текста EPG'));
+    EpgStatus;
+  end
+  else
+  begin
+    FVlc.SetDisplayTextVisible(False);
+    OutputDebugString(PChar('TimeEpgStatusTimer: не играет, скрываем текст'));
+  end;
 end;
 
 procedure TfrmStickyForm.PlayerStatusTimer(Sender: TObject);
 var
   CurrentProgress: Integer;
 begin
-  if FVlc.IsLoading then
-  begin
-    CurrentProgress := FVlc.GetActualLoadingProgress;
-
-    // Обновляем UI
-
-    FVlc.SetDisplayText(Format('Состояние: %s',
-      [FVLC.GetPlayerStatus]));
-
-
-
+  // Проверяем статус воспроизведения и обновляем EPG если нужно
   if FVlc.IsPlaying then
-    PlayerStatus.Enabled := false
+  begin
+    // Периодически обновляем EPG, но не слишком часто
+    if Random(10) = 0 then  // Примерно каждые 10 секунд
+    begin
+      EpgStatus;
+    end;
   end;
-
 end;
 
 procedure TfrmStickyForm.C1Click(Sender: TObject);
@@ -1358,9 +1319,20 @@ begin
     begin
       PlayChannelByIndex(idx);
       LoadPNGToControl(FButtonDir + 'stop-playing.png', sbPlay);
+
+      // Сразу обновляем текст EPG
+      TThread.CreateAnonymousThread(
+        procedure
+        begin
+          Sleep(500); // Небольшая задержка для загрузки потока
+          TThread.Synchronize(nil,
+            procedure
+            begin
+              EpgStatus;
+            end);
+        end).Start;
     end;
 end;
-
 
 procedure TfrmStickyForm.lbChannelsDrawItem(Control: TWinControl; Index: Integer;
   Rect: TRect; State: TOwnerDrawState);
@@ -1383,17 +1355,14 @@ var
   NewWidth, NewHeight: Integer;
   X, Y: Integer;
   DestRect: TRect;
-  LeftMargin: Integer; // Добавляем переменную для отступа слева
+  LeftMargin: Integer;
 begin
   if (Index < 0) or (Index >= FChannels.Count) then Exit;
 
   ch := FChannels[Index];
-  WriteDebugLog('lbChannelsDrawItem: отрисовка канала ' + ch.Name + ' (индекс ' + IntToStr(Index) + ')');
 
-  // Определяем отступ слева (в пикселях)
-  LeftMargin := 10; // Можно изменить на нужное значение
+  LeftMargin := 10;
 
-  // Определяем цвета текста
   if odSelected in State then
   begin
     lbChannels.Canvas.Brush.Color := clHighlight;
@@ -1409,29 +1378,23 @@ begin
 
   lbChannels.Canvas.FillRect(Rect);
 
-  // Получаем путь к логотипу
   LogoPath := GetLogoFilePath(ch);
-  WriteDebugLog('lbChannelsDrawItem: путь к логотипу - ' + LogoPath);
 
   if (LogoPath = '') or not FileExists(LogoPath) then
   begin
-    LogoPath := FCacheDir + 'NoLogo.png'; // Дефолтный логотип
-    WriteDebugLog('lbChannelsDrawItem: используется дефолтный логотип');
+    LogoPath := FCacheDir + 'NoLogo.png';
   end;
 
-  // Отрисовываем логотип с правильным масштабированием И ОТСТУПОМ СЛЕВА
   LogoRect := Rect;
-  LogoRect.Left := LogoRect.Left + LeftMargin; // ДОБАВЛЯЕМ ОТСТУП СЛЕВА
-  LogoRect.Right := LogoRect.Left + 50; // Фиксированная ширина для логотипа
-  LogoRect.Bottom := LogoRect.Top + 50; // Фиксированная высота для логотипа
+  LogoRect.Left := LogoRect.Left + LeftMargin;
+  LogoRect.Right := LogoRect.Left + 50;
+  LogoRect.Bottom := LogoRect.Top + 50;
 
-  // Центрируем по вертикали
   LogoRect.Top := Rect.Top + (Rect.Bottom - Rect.Top - 50) div 2;
   if LogoRect.Top < Rect.Top + 2 then
     LogoRect.Top := Rect.Top + 2;
   LogoRect.Bottom := LogoRect.Top + 50;
 
-  // ПРАВИЛЬНОЕ МАСШТАБИРОВАНИЕ PNG с сохранением качества
   if FileExists(LogoPath) then
   begin
     PNG := TPngImage.Create;
@@ -1439,35 +1402,26 @@ begin
       try
         PNG.LoadFromFile(LogoPath);
 
-        // Рассчитываем масштаб для сохранения пропорций
         ScaleX := (LogoRect.Right - LogoRect.Left) / PNG.Width;
         ScaleY := (LogoRect.Bottom - LogoRect.Top) / PNG.Height;
-        Scale := Min(ScaleX, ScaleY); // Используем минимальный масштаб для сохранения пропорций
+        Scale := Min(ScaleX, ScaleY);
 
         NewWidth := Round(PNG.Width * Scale);
         NewHeight := Round(PNG.Height * Scale);
 
-        // Центрируем изображение
         X := LogoRect.Left + ((LogoRect.Right - LogoRect.Left) - NewWidth) div 2;
         Y := LogoRect.Top + ((LogoRect.Bottom - LogoRect.Top) - NewHeight) div 2;
 
-        // Создаем Rect правильно - используем функцию Rect()
         DestRect := System.Classes.Rect(X, Y, X + NewWidth, Y + NewHeight);
 
-        // Устанавливаем высокое качество отрисовки
         SetStretchBltMode(lbChannels.Canvas.Handle, HALFTONE);
         SetBrushOrgEx(lbChannels.Canvas.Handle, 0, 0, nil);
 
-        // Рисуем PNG напрямую с сохранением прозрачности
         PNG.Draw(lbChannels.Canvas, DestRect);
-
-        WriteDebugLog(Format('Логотип отмасштабирован: %dx%d -> %dx%d (масштаб: %.2f)',
-          [PNG.Width, PNG.Height, NewWidth, NewHeight, Scale]));
 
       except
         on E: Exception do
         begin
-          WriteDebugLog('Ошибка загрузки логотипа: ' + E.Message);
         end;
       end;
     finally
@@ -1475,16 +1429,24 @@ begin
     end;
   end;
 
-  // Остальной код с учетом отступа слева
-  nameLeft := LogoRect.Right + 8; // Отступ после логотипа (уже с учетом LeftMargin)
+  nameLeft := LogoRect.Right + 8;
   oldFontSize := lbChannels.Canvas.Font.Size;
 
-  // Название канала
   lbChannels.Canvas.Font.Color := textColor;
   lbChannels.Canvas.Font.Style := [fsBold];
   lbChannels.Canvas.TextOut(nameLeft, Rect.Top + 6, ch.Name);
 
-  // Группа канала
+  if ch.AspectRatio <> '' then
+  begin
+    lbChannels.Canvas.Font.Size := oldFontSize - 2;
+    lbChannels.Canvas.Font.Color := clBlue;
+    var aspectText := ' [' + ch.AspectRatio + ']';
+    var textWidth := lbChannels.Canvas.TextWidth(ch.Name);
+    lbChannels.Canvas.TextOut(nameLeft + textWidth + 5, Rect.Top + 6, aspectText);
+    lbChannels.Canvas.Font.Size := oldFontSize;
+    lbChannels.Canvas.Font.Color := textColor;
+  end;
+
   lbChannels.Canvas.Font.Size := oldFontSize - 1;
   lbChannels.Canvas.Font.Style := [];
   lbChannels.Canvas.Font.Color := grayTextColor;
@@ -1494,14 +1456,11 @@ begin
   else
     lbChannels.Canvas.TextOut(nameLeft, Rect.Top + 24, 'Группа: не указана');
 
-  // Восстанавливаем размер шрифта
   lbChannels.Canvas.Font.Size := oldFontSize;
 
-  // ПРАВИЛЬНАЯ обработка EPG с учетом TVGShift
   hasCurr := False;
-  nowDT := Now; // Текущее реальное время
+  nowDT := Now;
 
-  // Форматируем текст сдвига
   if ch.TVGShift <> 0 then
   begin
     if ch.TVGShift > 0 then
@@ -1519,22 +1478,18 @@ begin
   begin
     for i := 0 to ch.EPG.Count - 1 do
     begin
-      // ПРАВИЛЬНО: сдвигаем времена EPG программ, а не текущее время
       epgStartDT := IncHour(ch.EPG[i].StartDT, ch.TVGShift);
       epgStopDT := IncHour(ch.EPG[i].StopDT, ch.TVGShift);
 
-      // Ищем программу по реальному текущему времени
       if (epgStartDT <= nowDT) and (epgStopDT > nowDT) then
       begin
         currEPG := ch.EPG[i];
-        // Для отображения используем сдвинутые времена
         currEPG.StartDT := epgStartDT;
         currEPG.StopDT := epgStopDT;
 
         if i + 1 < ch.EPG.Count then
         begin
           nextEPG := ch.EPG[i + 1];
-          // Сдвигаем и следующую программу для отображения
           nextEPG.StartDT := IncHour(nextEPG.StartDT, ch.TVGShift);
           nextEPG.StopDT := IncHour(nextEPG.StopDT, ch.TVGShift);
         end;
@@ -1545,7 +1500,6 @@ begin
     end;
   end;
 
-  // Уменьшаем шрифт для EPG
   lbChannels.Canvas.Font.Size := oldFontSize - 1;
   lbChannels.Canvas.Font.Style := [];
   lbChannels.Canvas.Font.Color := grayTextColor;
@@ -1555,14 +1509,13 @@ begin
 
   if hasCurr then
   begin
-    // Отображаем сдвинутые времена
     if ch.TVGShift <> 0 then
     begin
       lbChannels.Canvas.TextOut(nameLeft, R.Top,
         Format('%s (%s-%s) [сдвиг %s]', [
           currEPG.Title,
-          FormatDateTime('hh:nn', currEPG.StartDT),  // Уже сдвинутое время
-          FormatDateTime('hh:nn', currEPG.StopDT),   // Уже сдвинутое время
+          FormatDateTime('hh:nn', currEPG.StartDT),
+          FormatDateTime('hh:nn', currEPG.StopDT),
           shiftText
         ]));
     end
@@ -1589,10 +1542,8 @@ begin
       lbChannels.Canvas.TextOut(nameLeft, R.Top, 'Нет актуальных данных');
   end;
 
-  // Восстанавливаем размер шрифта
   lbChannels.Canvas.Font.Size := oldFontSize;
 end;
-
 
 procedure TfrmStickyForm.LoadEPGUrlsFromM3ULine(const Line: string);
 var
@@ -1631,121 +1582,114 @@ begin
   end;
 end;
 
-
-
 procedure TfrmStickyForm.DownloadAndParseAllEPG;
 var
   i, total: Integer;
   FilePath, XmlPath: string;
   FileAgeHours: Double;
   EpgUrl: string;
+  LocalEpgUrls: TStringList;
 begin
-  WriteDebugLog('Запуск DownloadAndParseAllEPG');
+  OutputDebugString(PChar('DownloadAndParseAllEPG: начато обновление EPG'));
+
   ClearCurrentPrograms;
 
-  // Определяем источник EPG в зависимости от состояния чекбокса
-  if frmSettings.cbJTV.Checked then
-  begin
-    // Используем плейлист для получения EPG
-    if (FEpgUrls = nil) or (FEpgUrls.Count = 0) then
+  // Создаем локальную копию списка URL для потокобезопасности
+  LocalEpgUrls := TStringList.Create;
+  try
+    // Определяем источник EPG
+    if frmSettings.cbJTV.Checked then
     begin
-      WriteDebugLog('Нет EPG URL из плейлиста');
-      Exit;
-    end;
-    WriteDebugLog('Используем EPG из плейлиста');
-  end
-  else
-  begin
-    // Используем пользовательский EPG из deEpg.text
-    if Trim(frmSettings.deEpg.Text) = '' then
-    begin
-      WriteDebugLog('Нет пользовательского EPG URL');
-      Exit;
-    end;
-
-    // Создаем временный список с одним URL
-    if FEpgUrls = nil then
-      FEpgUrls := TStringList.Create
+      // Используем плейлист для получения EPG
+      if (FEpgUrls = nil) or (FEpgUrls.Count = 0) then
+      begin
+        OutputDebugString(PChar('DownloadAndParseAllEPG: нет URL EPG в плейлисте'));
+        Exit;
+      end;
+      LocalEpgUrls.Assign(FEpgUrls);
+    end
     else
-      FEpgUrls.Clear;
-
-    FEpgUrls.Add(frmSettings.deEpg.Text);
-    WriteDebugLog('Используем пользовательский EPG: ' + frmSettings.deEpg.Text);
-  end;
-
-  total := FEpgUrls.Count;
-  for i := 0 to total - 1 do
-  begin
-    if FStopRequested then
     begin
-      WriteDebugLog('Остановка цикла по запросу');
-      Break;
+      // Используем пользовательский EPG из deEpg.text
+      if Trim(frmSettings.deEpg.Text) = '' then
+      begin
+        OutputDebugString(PChar('DownloadAndParseAllEPG: пользовательский EPG не указан'));
+        Exit;
+      end;
+      LocalEpgUrls.Add(frmSettings.deEpg.Text);
     end;
 
-    try
-      // Получаем текущий URL
-      EpgUrl := FEpgUrls[i];
+    total := LocalEpgUrls.Count;
+    OutputDebugString(PChar('DownloadAndParseAllEPG: всего ' + IntToStr(total) + ' источников EPG'));
 
-      // Проверяем возраст существующего файла EPG
-      FilePath := path+'IPTV_Plugin\epg\' +
-                  StringReplace(EpgUrl, 'https://', '', [rfIgnoreCase]);
-      FilePath := StringReplace(FilePath, 'http://', '', [rfIgnoreCase]);
-      FilePath := StringReplace(FilePath, '/', PathDelim, [rfReplaceAll]);
-
-      XmlPath := ChangeFileExt(FilePath, '.xml');
-
-      // Если файл существует и ему меньше 24 часов - парсим существующий
-      if FileExists(XmlPath) then
+    for i := 0 to total - 1 do
+    begin
+      if FStopRequested then
       begin
-        FileAgeHours := (Now - FileDateToDateTime(FileAge(XmlPath))) * 24;
-        WriteDebugLog('Файл EPG существует: ' + XmlPath + ', возраст: ' +
-                      FormatFloat('0.00', FileAgeHours) + ' часов');
+        OutputDebugString(PChar('DownloadAndParseAllEPG: запрошена остановка'));
+        Break;
+      end;
 
-        if FileAgeHours < 24 then
+      try
+        EpgUrl := LocalEpgUrls[i];
+        OutputDebugString(PChar('DownloadAndParseAllEPG: обработка ' + EpgUrl));
+
+        FilePath := path + 'IPTV_Plugin\epg\' +
+                    StringReplace(EpgUrl, 'https://', '', [rfIgnoreCase]);
+        FilePath := StringReplace(FilePath, 'http://', '', [rfIgnoreCase]);
+        FilePath := StringReplace(FilePath, '/', PathDelim, [rfReplaceAll]);
+
+        XmlPath := ChangeFileExt(FilePath, '.xml');
+
+        if FileExists(XmlPath) then
         begin
-          WriteDebugLog('Файл моложе 24 часов, парсим существующий: ' + XmlPath);
-          ParseExistingEPG(XmlPath, i); // Передаем индекс i
-          Continue; // Переходим к следующему URL
-        end
-        else
-        begin
-          WriteDebugLog('Файл старше 24 часов, скачиваем заново: ' + EpgUrl);
+          FileAgeHours := (Now - FileDateToDateTime(FileAge(XmlPath))) * 24;
+
+          if FileAgeHours < 24 then
+          begin
+            OutputDebugString(PChar('DownloadAndParseAllEPG: используем кэшированный файл (возраст ' + FloatToStr(FileAgeHours) + ' ч)'));
+            ParseExistingEPG(XmlPath, EpgUrl);
+            Continue;
+          end
+          else
+          begin
+            OutputDebugString(PChar('DownloadAndParseAllEPG: файл устарел (возраст ' + FloatToStr(FileAgeHours) + ' ч)'));
+          end;
         end;
-      end
-      else
-      begin
-        WriteDebugLog('Файл EPG не существует, скачиваем: ' + EpgUrl);
+
+        OutputDebugString(PChar('DownloadAndParseAllEPG: загрузка нового EPG'));
+        DownloadAndParseEPG(EpgUrl);
+
+      except
+        on E: Exception do
+        begin
+          OutputDebugString(PChar('DownloadAndParseAllEPG ошибка: ' + E.Message));
+        end;
       end;
 
-      WriteDebugLog('Загрузка EPG: ' + EpgUrl);
-      DownloadAndParseEPG(EpgUrl);
-
-    except
-      on E: Exception do
-      begin
-        WriteDebugLog('Ошибка загрузки EPG: ' + E.Message);
-      end;
+      Sleep(100);
     end;
-
-    Sleep(100);
+  finally
+    LocalEpgUrls.Free;
   end;
-
-  // Если использовали временный список для пользовательского EPG, очищаем его
-  if not frmSettings.cbJTV.Checked and (FEpgUrls <> nil) then
-    FEpgUrls.Clear;
 
   if not FStopRequested then
+  begin
     TThread.Queue(nil,
       procedure
       begin
         RefreshCurrentPrograms;
-        WriteDebugLog('EPG обновлено');
+        // Обновляем текст EPG в плеере
+        EpgStatus;
       end);
-    EpgStatus;
-    lbChannels.Invalidate;
+
+    OutputDebugString(PChar('DownloadAndParseAllEPG: обновление завершено'));
+  end
+  else
+  begin
+    OutputDebugString(PChar('DownloadAndParseAllEPG: обновление прервано'));
+  end;
 end;
-
-
 
 procedure TfrmStickyForm.DecompressGZip(const GZipFile, XmlFile: string);
 var
@@ -1753,12 +1697,11 @@ var
   Target: TFileStream;
   ZStream: TZDecompressionStream;
 begin
-  WriteDebugLog('Распаковка: ' + GZipFile);
   Source := TFileStream.Create(GZipFile, fmOpenRead or fmShareDenyWrite);
   try
     Target := TFileStream.Create(XmlFile, fmCreate);
     try
-      ZStream := TZDecompressionStream.Create(Source, 15 + 16); // <-- 15+16 = GZIP mode
+      ZStream := TZDecompressionStream.Create(Source, 15 + 16);
       try
         Target.CopyFrom(ZStream, 0);
       finally
@@ -1772,8 +1715,6 @@ begin
   end;
 end;
 
-
-
 procedure TfrmStickyForm.DownloadAndParseEPG(const AUrl: string);
 var
   HttpClient: TNetHTTPClient;
@@ -1781,15 +1722,13 @@ var
   FilePath, XmlPath: string;
   MS: TMemoryStream;
 begin
-  WriteDebugLog('DownloadAndParseEPG: ' + AUrl);
+  OutputDebugString(PChar('DownloadAndParseEPG: загрузка ' + AUrl));
 
-  // Преобразуем URL → путь на диске
-  FilePath := path+'IPTV_Plugin\epg\' +
+  FilePath := path + 'IPTV_Plugin\epg\' +
               StringReplace(AUrl, 'https://', '', [rfIgnoreCase]);
   FilePath := StringReplace(FilePath, 'http://', '', [rfIgnoreCase]);
   FilePath := StringReplace(FilePath, '/', PathDelim, [rfReplaceAll]);
 
-  // Создаём все папки для будущего файла
   ForceDirectories(ExtractFilePath(FilePath));
 
   XmlPath := ChangeFileExt(FilePath, '.xml');
@@ -1808,20 +1747,20 @@ begin
       Resp := HttpClient.Get(AUrl, MS);
       if Resp.StatusCode = 200 then
       begin
+        OutputDebugString(PChar('DownloadAndParseEPG: успешно загружено, размер ' + IntToStr(MS.Size)));
+
         MS.SaveToFile(FilePath);
-        WriteDebugLog('EPG скачан: ' + FilePath);
 
         if ExtractFileExt(FilePath).ToLower = '.gz' then
         begin
           try
+            OutputDebugString(PChar('DownloadAndParseEPG: распаковка GZIP'));
             DecompressGZip(FilePath, XmlPath);
-            WriteDebugLog('EPG распакован: ' + XmlPath);
-            // Удаляем временный gz файл после распаковки
             DeleteFile(FilePath);
           except
             on E: Exception do
             begin
-              WriteDebugLog('Ошибка распаковки: ' + E.Message);
+              OutputDebugString(PChar('DownloadAndParseEPG ошибка распаковки: ' + E.Message));
               Exit;
             end;
           end;
@@ -1834,11 +1773,12 @@ begin
           MS.Clear;
           MS.LoadFromFile(XmlPath);
           ParseEPGStream(MS);
+          OutputDebugString(PChar('DownloadAndParseEPG: успешно обработан'));
         end;
       end
       else
       begin
-        WriteDebugLog('Ошибка HTTP ' + Resp.StatusText);
+        OutputDebugString(PChar('DownloadAndParseEPG: HTTP ошибка ' + IntToStr(Resp.StatusCode)));
       end;
     finally
       MS.Free;
@@ -1848,10 +1788,14 @@ begin
   end;
 
   if not FStopRequested then
-    EpgStatus;
+  begin
+    TThread.Synchronize(nil,
+      procedure
+      begin
+        EpgStatus;
+      end);
+  end;
 end;
-
-
 
 procedure TfrmStickyForm.ParseEPGStream(const MS: TMemoryStream);
 var
@@ -1863,14 +1807,13 @@ var
   ch: TChannelInfo;
   epgItem: TEPGItem;
   R: TRect;
-  chDict: TDictionary<string, Integer>; // ключ = TVGID/Name → индекс в FChannels
+  chDict: TDictionary<string, Integer>;
   k: Integer;
 begin
-  WriteDebugLog('Начало ParseEPGStream (NativeXml)');
+  OutputDebugString(PChar('ParseEPGStream: начало парсинга'));
 
   chDict := TDictionary<string, Integer>.Create;
   try
-    // Словарь только для каналов в lbChannels
     for i := 0 to lbChannels.Count - 1 do
     begin
       ch := FChannels[i];
@@ -1883,6 +1826,8 @@ begin
         chDict.TryAdd(key, i);
     end;
 
+    OutputDebugString(PChar('ParseEPGStream: каналов в словаре ' + IntToStr(chDict.Count)));
+
     try
       MS.Position := 0;
       XML := TNativeXml.Create(nil);
@@ -1892,13 +1837,13 @@ begin
 
         if Root = nil then
         begin
-          WriteDebugLog('Ошибка: пустой XML');
+          OutputDebugString(PChar('ParseEPGStream: корневой элемент не найден'));
           Exit;
         end;
 
         nowDT := Now;
 
-        // --- Убираем старые EPG (оставляем только 6 часов в обе стороны) ---
+        // Очищаем устаревшие записи EPG
         for i := 0 to lbChannels.Count - 1 do
         begin
           ch := FChannels[i];
@@ -1913,12 +1858,13 @@ begin
           end;
         end;
 
-        // --- Парсим XML ---
+        var programCount := 0;
         for i := 0 to Root.NodeCount - 1 do
         begin
           Node := Root.Nodes[i];
           if SameText(Node.Name, 'programme') then
           begin
+            Inc(programCount);
             chId   := Node.AttributeByName['channel'].ValueUnicode;
             startS := Node.AttributeByName['start'].ValueUnicode;
             stopS  := Node.AttributeByName['stop'].ValueUnicode;
@@ -1937,7 +1883,6 @@ begin
             progStart := ParseXMLTVDate(startS);
             progStop  := ParseXMLTVDate(stopS);
 
-            // фильтр по времени ±6 часов
             if (progStart > 0) and (progStop > progStart) and
                (progStop >= (nowDT - (6/24))) and (progStart <= (nowDT + (6/24))) then
             begin
@@ -1947,10 +1892,9 @@ begin
               begin
                 ch := FChannels[chDict[key]];
 
-                // --- проверка на дубликат ---
                 var duplicate := False;
                 for k := 0 to ch.EPG.Count - 1 do
-                  if (Abs(ch.EPG[k].StartDT - progStart) < (1/86400)) and // равенство до 1 сек
+                  if (Abs(ch.EPG[k].StartDT - progStart) < (1/86400)) and
                      SameText(ch.EPG[k].Title, title) then
                   begin
                     duplicate := True;
@@ -1965,7 +1909,6 @@ begin
                   ch.EPG.Add(epgItem);
                 end;
 
-                // если программа текущая
                 if (progStart <= nowDT) and (progStop > nowDT) then
                 begin
                   ch.CurrentTitle := title;
@@ -1981,20 +1924,20 @@ begin
           end;
         end;
 
-        WriteDebugLog('Завершение ParseEPGStream (NativeXml)');
+        OutputDebugString(PChar('ParseEPGStream: обработано ' + IntToStr(programCount) + ' программ'));
       finally
         XML.Free;
       end;
     except
       on E: Exception do
-        WriteDebugLog('Ошибка ParseEPGStream: ' + E.Message);
+      begin
+        OutputDebugString(PChar('ParseEPGStream ошибка: ' + E.Message));
+      end;
     end;
   finally
     chDict.Free;
   end;
 end;
-
-
 
 function TfrmStickyForm.ParseXMLTVDate(const S: string): TDateTime;
 var
@@ -2067,22 +2010,22 @@ end;
 
 procedure TfrmStickyForm.RefreshCurrentPrograms;
 begin
+  OutputDebugString(PChar('RefreshCurrentPrograms: обновление списка каналов'));
   lbChannels.Invalidate;
 end;
 
 procedure TfrmStickyForm.sbOpenClick(Sender: TObject);
-
 begin
   frmSettings.ShowModal;
 
-  if not Assigned(frmSettings) then else
+  if Assigned(frmSettings) then
   begin
     DownloadM3UFromURL(frmSettings.edURLM3U.Text);
-  TThread.CreateAnonymousThread(
-    procedure
-    begin
-      DownloadAndParseAllEPG;
-    end).Start;
+    TThread.CreateAnonymousThread(
+      procedure
+      begin
+        DownloadAndParseAllEPG;
+      end).Start;
   end;
 end;
 
@@ -2130,18 +2073,17 @@ begin
   PlayChannelByIndex(idx);
 end;
 
-
 procedure TfrmStickyForm.FullScreenFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
 begin
   case Key of
     VK_ESCAPE:
-      (Sender as TForm).ModalResult := mrCancel; // Выход по ESC
+      (Sender as TForm).ModalResult := mrCancel;
     VK_SPACE:
-      TogglePlayPause; // Пауза/воспроизведение по пробелу
+      TogglePlayPause;
     VK_UP:
-      VolumeUp; // Увеличить громкость
+      VolumeUp;
     VK_DOWN:
-      VolumeDown; // Уменьшить громкость
+      VolumeDown;
   end;
 end;
 
@@ -2163,11 +2105,9 @@ end;
 
 procedure TfrmStickyForm.FullScreenFormDblClick(Sender: TObject);
 begin
-  (Sender as TForm).ModalResult := mrCancel; // Выход по двойному клику
-//  FullScreenForm.Close;
+  (Sender as TForm).ModalResult := mrCancel;
 end;
 
-// Вспомогательные методы для управления в полноэкранном режиме
 procedure TfrmStickyForm.TogglePlayPause;
 begin
   if FVlc.IsPlaying then
@@ -2182,16 +2122,12 @@ begin
   end;
 end;
 
-
 procedure TfrmStickyForm.sbFullScreenClick(Sender: TObject);
 var
-
   oldParent: TWinControl;
   oldAlign: TAlign;
   wasPlaying: Boolean;
   currentPosition: Int64;
-
-  // Переменные для сохранения событий
   oldOnClick: TNotifyEvent;
   oldOnDblClick: TNotifyEvent;
   oldOnMouseDown: TMouseEvent;
@@ -2201,100 +2137,72 @@ var
   oldOnKeyPress: TKeyPressEvent;
   oldOnKeyUp: TKeyEvent;
 begin
-  // СОХРАНЯЕМ СОСТОЯНИЕ И ВСЕ СОБЫТИЯ
   oldParent := FVlc.Parent;
   oldAlign := FVlc.Align;
   wasPlaying := FVlc.IsPlaying;
-  currentPosition := FVlc.GetPosition;
 
-  // Сохраняем все обработчики событий
   oldOnClick := FVlc.OnClick;
   oldOnDblClick := FVlc.OnDblClick;
   oldOnMouseDown := FVlc.OnMouseDown;
   oldOnMouseMove := FVlc.OnMouseMove;
   oldOnMouseUp := FVlc.OnMouseUp;
 
-
-  // Создаем полноэкранную форму
   aFullScreenForm := TFullScreenForm.Create(nil);
   try
     aFullScreenForm.SetBounds(Monitor.Left, Monitor.Top, Monitor.Width, Monitor.Height);
 
-    // НАСТРАИВАЕМ ОБРАБОТЧИКИ СОБЫТИЙ ДЛЯ ПОЛНОЭКРАННОЙ ФОРМЫ
     aFullScreenForm.OnKeyDown := FullScreenFormKeyDown;
     aFullScreenForm.OnDblClick := FullScreenFormDblClick;
-    aFullScreenForm.KeyPreview := True; // Важно: форма получает события первой
+    aFullScreenForm.KeyPreview := True;
 
-    // ПЕРЕНОС В ПОЛНОЭКРАННЫЙ РЕЖИМ
     if wasPlaying then
-      FVlc.Stop;
+      FVlc.Pause;
 
-    // Меняем родителя
-    FVlc.SetNewParent(aFullScreenForm);
-
-    // ВОССТАНАВЛИВАЕМ ВСЕ СОБЫТИЯ НА НОВОЙ ФОРМЕ
     FVlc.OnClick := oldOnClick;
     FVlc.OnDblClick := oldOnDblClick;
     FVlc.OnMouseDown := oldOnMouseDown;
     FVlc.OnMouseMove := oldOnMouseMove;
     FVlc.OnMouseUp := oldOnMouseUp;
 
-
-    // Устанавливаем полноэкранные размеры
     FVlc.Align := alNone;
     FVlc.SetBounds(0, 0, Monitor.Width, Monitor.Height);
     FVlc.Show;
 
-    // Восстанавливаем воспроизведение
     if wasPlaying then
     begin
       Sleep(200);
       FVlc.Play;
     end;
 
-    // Показываем полноэкранную форму МОДАЛЬНО (только ShowModal)
     aFullScreenForm.ShowModal;
 
   finally
-    // ВОЗВРАТ ИЗ ПОЛНОЭКРАННОГО РЕЖИМА
     if FVlc.IsPlaying then
-      FVlc.Stop;
+      FVlc.Pause;
 
-    // Возвращаем на исходную панель
-    FVlc.SetNewParent(Panel_VLC_Player);
-
-    // ВОССТАНАВЛИВАЕМ ВСЕ СОБЫТИЯ НА ИСХОДНОМ РОДИТЕЛЕ
     FVlc.OnClick := oldOnClick;
     FVlc.OnDblClick := oldOnDblClick;
     FVlc.OnMouseDown := oldOnMouseDown;
     FVlc.OnMouseMove := oldOnMouseMove;
     FVlc.OnMouseUp := oldOnMouseUp;
 
-    // ВОССТАНАВЛИВАЕМ РАЗМЕРЫ
     FVlc.Align := alNone;
     FVlc.SetBounds(2, 2, Panel_VLC_Player.Width - 4, Panel_VLC_Player.Height - 4);
     FVlc.Align := oldAlign;
 
     FVlc.Show;
 
-    // Принудительно обновляем видео вывод
-    FVlc.ReattachVideo;
-
-    // Восстанавливаем воспроизведение
     if wasPlaying then
     begin
       Sleep(200);
       FVlc.Play;
     end;
 
-    // Обновляем интерфейс
     Panel_VLC_Player.Invalidate;
 
-    // Освобождаем форму
     aFullScreenForm.Free;
   end;
 end;
-
 
 procedure TfrmStickyForm.tvVolumeChange(Sender: TObject);
 begin
@@ -2305,11 +2213,11 @@ procedure TfrmStickyForm.sbPlayClick(Sender: TObject);
 var
   idx: Integer;
 begin
-
   if Fvlc.IsPlaying then
   begin
     Fvlc.Stop;
     LoadPNGToControl(FButtonDir + 'play.png', sbPlay);
+    FVlc.SetDisplayTextVisible(False);
   end else
   begin
     idx := lbChannels.ItemIndex;
@@ -2325,8 +2233,6 @@ begin
   sbPlay.Invalidate;
   sbPlay.Update;
 end;
-
-
 
 procedure TfrmStickyForm.sbVolumeClick(Sender: TObject);
 begin
@@ -2359,4 +2265,3 @@ end;
 initialization
 
 end.
-

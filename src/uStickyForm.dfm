@@ -139,13 +139,17 @@ object frmStickyForm: TfrmStickyForm
         'Accept=*/*'
         'Accept-Language=en-US,en;q=0.9'
         'Accept-Encoding=gzip, deflate, br')
-      InfoText.FontSize = 10
-      InfoText.Y = 408
+      StatusBarVisible = False
+      StatusBarFontSize = 12
+      StatusBarBackground = clBlack
+      StatusBarTextColor = clWhite
+      StatusBarCornerRadius = 4
       OnVideoDblClick = FVlcVideoDblClick
       Align = alClient
-      BevelOuter = bvNone
       Color = clBlack
+      DoubleBuffered = True
       ParentBackground = False
+      ParentDoubleBuffered = False
       PopupMenu = pmMenu
       TabOrder = 0
       OnDblClick = FVlcDblClick

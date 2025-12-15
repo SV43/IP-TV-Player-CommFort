@@ -3,144 +3,172 @@
 interface
 
 uses
-  Windows, Messages, SysUtils, Classes, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Dialogs,
-  TypInfo, Vcl.Graphics, Vcl.Controls, Vcl.Imaging.pngimage, Math, Vcl.Imaging.jpeg, Vcl.Menus;
+  Windows, Messages, SysUtils, Classes, Vcl.StdCtrls, Vcl.ExtCtrls, TypInfo,
+  Vcl.Graphics, Vcl.Controls, Vcl.Imaging.pngimage, Math, Vcl.Imaging.jpeg,
+  Vcl.Menus, SyncObjs, DateUtils, Vcl.Forms, Winapi.MMSystem, System.StrUtils,
+  System.Generics.Collections, System.Types, System.UITypes;
 
 type
-  // Объявления типов VLC
+  TVlcState = (vlcIdle, vlcLoading, vlcPlaying, vlcPaused, vlcStopped, vlcError, vlcBuffering);
+
+  TVlcNotifyEvent = procedure(Sender: TObject) of object;
+  TVlcErrorEvent = procedure(Sender: TObject; ErrorCode: Integer; const ErrorMessage: string) of object;
+  TVlcMouseEvent = procedure(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer) of object;
+  TVlcMouseMoveEvent = procedure(Sender: TObject; Shift: TShiftState; X, Y: Integer) of object;
+  TVlcLogEvent = procedure(Sender: TObject; const Msg: string) of object;
+  TVlcProgressEvent = procedure(Sender: TObject; Progress: Integer) of object;
+  TVlcPositionEvent = procedure(Sender: TObject; Position: Single) of object;
+  TVlcTimeEvent = procedure(Sender: TObject; Time: Int64) of object;
+  TVlcMouseWheelEvent = procedure(Sender: TObject; Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint) of object;
+
   Plibvlc_instance_t = Pointer;
   Plibvlc_media_t = Pointer;
   Plibvlc_media_player_t = Pointer;
   Plibvlc_event_manager_t = Pointer;
 
-  // Состояния плеера
-  TVlcState = (vlcIdle, vlcLoading, vlcPlaying, vlcPaused, vlcStopped, vlcError);
-
-  // Режимы качества
-  TVlcQualityMode = (qmAuto, qmBest, qmWorst, qmCustom);
-
-  // Типы событий
-  TVlcNotifyEvent = procedure(Sender: TObject) of object;
-  TVlcLogEvent = procedure(Sender: TObject; const Msg: string) of object;
-  TVlcProgressEvent = procedure(Sender: TObject; Progress: Integer) of object;
-
-  // События мыши
-  TVlcMouseEvent = procedure(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer) of object;
-  TVlcMouseMoveEvent = procedure(Sender: TObject; Shift: TShiftState; X, Y: Integer) of object;
-  TVlcMouseWheelEvent = procedure(Sender: TObject; Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint) of object;
-
-  // Текстовая информация для отображения
-  TDisplayTextItem = class(TPersistent)
-  private
-    FText: string;
-    FFontSize: Integer;
-    FFontColor: TColor;
-    FFontStyle: TFontStyles;
-    FX: Integer;
-    FY: Integer;
-    FVisible: Boolean;
-    FOnChange: TNotifyEvent;
-    procedure SetText(const Value: string);
-    procedure SetFontSize(const Value: Integer);
-    procedure SetFontColor(const Value: TColor);
-    procedure SetFontStyle(const Value: TFontStyles);
-    procedure SetX(const Value: Integer);
-    procedure SetY(const Value: Integer);
-    procedure SetVisible(const Value: Boolean);
-  protected
-    procedure Changed;
-  public
-    constructor Create;
-    procedure Assign(Source: TPersistent); override;
-  published
-    property Text: string read FText write SetText;
-    property FontSize: Integer read FFontSize write SetFontSize default 12;
-    property FontColor: TColor read FFontColor write SetFontColor default clWhite;
-    property FontStyle: TFontStyles read FFontStyle write SetFontStyle default [];
-    property X: Integer read FX write SetX default 20;
-    property Y: Integer read FY write SetY default 20;
-    property Visible: Boolean read FVisible write SetVisible default True;
-    property OnChange: TNotifyEvent read FOnChange write FOnChange;
-  end;
+  TLockCallback = function(opaque: Pointer; planes: PPointer): Pointer; cdecl;
+  TUnlockCallback = procedure(opaque: Pointer; picture: Pointer; planes: PPointer); cdecl;
+  TDisplayCallback = procedure(opaque: Pointer; picture: Pointer); cdecl;
+  TVlcEventCallback = procedure(p_event: Pointer; user_data: Pointer); cdecl;
 
   TVlcPlayer = class(TCustomPanel)
   private
-    FLibPath: string;              // Путь к библиотеке VLC
-    FLibHandle: THandle;           // Хэндл загруженной библиотеки
-    FState: TVlcState;             // Текущее состояние плеера
-    FMediaURL: string;             // URL медиа-потока
-    FVolume: Integer;              // Громкость (0-100)
-    FAutoPlay: Boolean;            // Автоматическое воспроизведение
-    FOriginalParent: TWinControl;  // Исходный родительский контрол
-    FUserAgent: string;            // User-Agent для HTTP-запросов
-    FReferer: string;              // Referer для HTTP-запросов
-    FHttpHeaders: TStringList;     // Дополнительные HTTP-заголовки
-    FAutoDetectProtectedStreams: Boolean; // Автоопределение защищенных потоков
-    FForceWinkHeaders: Boolean;    // Принудительное использование Wink заголовков
-    FIsLoading: Boolean;           // Флаг загрузки
-    FLoadingProgress: Integer;     // Прогресс загрузки
-    FQualityMode: TVlcQualityMode; // Режим качества
-    FForcedBitrate: Integer;       // Принудительный битрейт
-    FForcedResolution: string;     // Принудительное разрешение
-    FMuted: Boolean;               // Флаг состояния звука (включен/выключен)
+    FLibPath: string;
+    FLibHandle: THandle;
+    FInstance: Plibvlc_instance_t;
+    FMedia: Plibvlc_media_t;
+    FPlayer: Plibvlc_media_player_t;
+    FEventManager: Plibvlc_event_manager_t;
 
-    // Дочерняя панель для видео с отступами
+    FState: TVlcState;
+    FMediaURL: string;
+    FVolume: Integer;
+    FAutoPlay: Boolean;
+    FUserAgent: string;
+    FReferer: string;
+    FHttpHeaders: TStringList;
+    FMuted: Boolean;
+    FLoopPlayback: Boolean;
+    FHighQuality: Boolean;
 
-    FVideoTopMargin: Integer;      // Отступ сверху для видео
-    FVideoBottomMargin: Integer;   // Отступ снизу для видео
+    FVideoWidth: Integer;
+    FVideoHeight: Integer;
+    FVideoPitch: Integer;
+    FVideoBuffer: array[0..1] of Pointer;
+    FCurrentBuffer: Integer;
+    FBackBuffer: Pointer;
+    FVideoBufferSize: Cardinal;
+    FVideoBitmap: TBitmap;
+    FFrameReady: Boolean;
+    FFrameLock: TCriticalSection;
+    FBufferValid: Boolean;
 
-    // Указатели на объекты VLC
-    FInstance: Plibvlc_instance_t;      // Экземпляр VLC
-    FMedia: Plibvlc_media_t;         // Медиа-объект
-    FPlayer: Plibvlc_media_player_t;        // Плеер
-    FEventManager: Plibvlc_event_manager_t;  // Менеджер событий
+    FFrameTimer: TTimer;
+    FPositionTimer: TTimer;
+    FHealthTimer: TTimer;
+    FSyncTimer: TTimer;
+    FFallbackTimer: TTimer;
 
-    // Объявления функций библиотеки VLC
+    FOriginalWndProc: TWndMethod;
+    FMouseCapture: Boolean;
+    FLastMouseMoveTime: Cardinal;
+
+    FLastFrameTime: Cardinal;
+    FFrameCount: Integer;
+    FLastFpsTime: Cardinal;
+    FCurrentFPS: Integer;
+    FTargetFPS: Integer;
+
+    FAudioSyncEnabled: Boolean;
+    FLastAudioTime: Int64;
+    FAudioDelay: Integer;
+
+    FAdjustedCache: Boolean;
+    FAutoRestartEnabled: Boolean;
+    FAutoRestartInterval: Integer;
+    FLastFrameUpdateTime: Cardinal;
+    FLastMemoryCheck: Cardinal;
+    FStreamStartTime: TDateTime;
+
+    FShowLoading: Boolean;
+    FFirstFrameTime: Cardinal;
+    FAnimationHideDelay: Integer;
+    FLoadingStage: string;
+
+    FStatusBarVisible: Boolean;
+    FStatusBarText: string;
+    FStatusBarFontSize: Integer;
+    FStatusBarBackground: TColor;
+    FStatusBarTextColor: TColor;
+    FStatusBarCornerRadius: Integer;
+
+    FTempRestartURL: string;
+    FTempRestartPosition: Single;
+
+    FAudioEnabled: Boolean;
+    FVideoStarted: Boolean;
+    FIsLoading: Boolean;
+    FShutdownMode: Boolean;
+
+    FDisplayText: string;
+    FDisplayTextVisible: Boolean;
+    FDisplayTextFontSize: Integer;
+    FDisplayTextColor: TColor;
+    FDisplayTextBackground: TColor;
+    FDisplayTextBackgroundAlpha: Integer;
+    FDisplayTextCornerRadius: Integer;
+
+    FShowTopImage: Boolean;
+    FTopImage: TPNGImage;
+    FTopImagePath: string;
+    FTopImageWidth: Integer;
+    FTopImageHeight: Integer;
+    FTopImageMargin: Integer;
+
     T_libvlc_new: function(argc: Integer; argv: PPAnsiChar): Plibvlc_instance_t; cdecl;
     T_libvlc_release: procedure(p_instance: Plibvlc_instance_t); cdecl;
-    T_libvlc_media_new_path: function(p_instance: Plibvlc_instance_t; path: PAnsiChar): Plibvlc_media_t; cdecl;
     T_libvlc_media_new_location: function(p_instance: Plibvlc_instance_t; psz_mrl: PAnsiChar): Plibvlc_media_t; cdecl;
+    T_libvlc_media_new_path: function(p_instance: Plibvlc_instance_t; path: PAnsiChar): Plibvlc_media_t; cdecl;
     T_libvlc_media_release: procedure(p_media: Plibvlc_media_t); cdecl;
     T_libvlc_media_player_new_from_media: function(p_media: Plibvlc_media_t): Plibvlc_media_player_t; cdecl;
     T_libvlc_media_player_release: procedure(p_player: Plibvlc_media_player_t); cdecl;
     T_libvlc_media_player_play: function(p_player: Plibvlc_media_player_t): Integer; cdecl;
     T_libvlc_media_player_pause: procedure(p_player: Plibvlc_media_player_t); cdecl;
     T_libvlc_media_player_stop: procedure(p_player: Plibvlc_media_player_t); cdecl;
-    T_libvlc_media_player_set_hwnd: procedure(p_player: Plibvlc_media_player_t; hwnd: Pointer); cdecl;
     T_libvlc_audio_set_volume: procedure(p_player: Plibvlc_media_player_t; volume: Integer); cdecl;
     T_libvlc_media_add_option: procedure(p_media: Plibvlc_media_t; psz_options: PAnsiChar); cdecl;
-    T_libvlc_media_player_get_length: function(p_player: Plibvlc_media_player_t): Int64; cdecl;
     T_libvlc_media_player_get_time: function(p_player: Plibvlc_media_player_t): Int64; cdecl;
+    T_libvlc_media_player_set_time: procedure(p_player: Plibvlc_media_player_t; time: Int64); cdecl;
     T_libvlc_media_player_get_position: function(p_player: Plibvlc_media_player_t): Single; cdecl;
-    T_libvlc_event_attach: procedure(p_event_manager: Plibvlc_event_manager_t; event_type: Integer; callback: Pointer; user_data: Pointer); cdecl;
+    T_libvlc_media_player_set_position: procedure(p_player: Plibvlc_media_player_t; position: Single); cdecl;
+    T_libvlc_event_attach: procedure(p_event_manager: Plibvlc_event_manager_t; event_type: Integer; callback: TVlcEventCallback; user_data: Pointer); cdecl;
     T_libvlc_media_player_event_manager: function(p_player: Plibvlc_media_player_t): Plibvlc_event_manager_t; cdecl;
     T_libvlc_audio_set_mute: procedure(p_player: Plibvlc_media_player_t; status: Integer); cdecl;
     T_libvlc_audio_get_mute: function(p_player: Plibvlc_media_player_t): Integer; cdecl;
     T_libvlc_media_player_is_playing: function(p_player: Plibvlc_media_player_t): Integer; cdecl;
+    T_libvlc_video_set_callbacks: procedure(p_player: Plibvlc_media_player_t; lock: TLockCallback;
+      unlock: TUnlockCallback; display: TDisplayCallback; opaque: Pointer); cdecl;
+    T_libvlc_video_set_format: procedure(p_player: Plibvlc_media_player_t; chroma: PAnsiChar;
+      width, height: Cardinal; pitch: Cardinal); cdecl;
+    T_libvlc_video_get_size: function(p_player: Plibvlc_media_player_t; num: Integer; var px, py: Cardinal): Integer; cdecl;
+    T_libvlc_media_player_set_hwnd: procedure(p_player: Plibvlc_media_player_t; drawable: Pointer); cdecl;
+    T_libvlc_media_player_get_length: function(p_player: Plibvlc_media_player_t): Int64; cdecl;
 
-    // НОВЫЕ ОБЪЯВЛЕНИЯ ФУНКЦИЙ VLC
-    T_libvlc_media_player_get_buffer: function(p_mi: Plibvlc_media_player_t): Single; cdecl;
-    T_libvlc_media_player_get_media: function(p_mi: Plibvlc_media_player_t): Plibvlc_media_t; cdecl;
-    T_libvlc_media_get_mrl: function(p_md: Plibvlc_media_t): PAnsiChar; cdecl;
-
-    // НОВЫЕ ПОЛЯ ДЛЯ РЕАЛЬНОГО ПРОГРЕССА
-    FLoadStartTime: Cardinal;       // Время начала загрузки
-    FLastProgressUpdate: Cardinal;  // Время последнего обновления прогресса
-    FProgressTimer: TTimer;         // Таймер для обновления прогресса
-
-    // События компонента
     FOnPlaying: TVlcNotifyEvent;
     FOnPaused: TVlcNotifyEvent;
     FOnStopped: TVlcNotifyEvent;
     FOnEndReached: TVlcNotifyEvent;
-    FOnError: TVlcNotifyEvent;
-    FOnLoading: TVlcNotifyEvent;
+    FOnError: TVlcErrorEvent;
+    FOnStateChanged: TVlcNotifyEvent;
     FOnLog: TVlcLogEvent;
+    FOnLoading: TVlcNotifyEvent;
     FOnLoadingProgress: TVlcProgressEvent;
     FOnBuffering: TVlcProgressEvent;
-    FOnQualityChanged: TVlcNotifyEvent;
+    FOnPositionChanged: TVlcPositionEvent;
+    FOnTimeChanged: TVlcTimeEvent;
+    FOnVideoStarted: TVlcNotifyEvent;
+    FOnVideoSizeChanged: TVlcNotifyEvent;
 
-    // НОВЫЕ СОБЫТИЯ МЫШИ
     FOnVideoMouseDown: TVlcMouseEvent;
     FOnVideoMouseUp: TVlcMouseEvent;
     FOnVideoMouseMove: TVlcMouseMoveEvent;
@@ -148,193 +176,243 @@ type
     FOnVideoDblClick: TVlcNotifyEvent;
     FOnVideoMouseWheel: TVlcMouseWheelEvent;
 
-    // Текстовые элементы для отображения
-    FInfoText: TDisplayTextItem;
-    FShowTextWhenIdle: Boolean;
+    procedure HandlePlayingEvent;
+    procedure HandlePausedEvent;
+    procedure HandleStoppedEvent;
+    procedure HandleEndReachedEvent;
+    procedure HandleErrorEvent;
+    procedure HandleBufferingEvent;
+    procedure HandleOpeningEvent;
+    procedure HandleTimeChangedEvent;
+    procedure HandlePositionChangedEvent;
 
-    // Изображения
-    FTopImage: TPicture;
-    FShowTopImage: Boolean;
-
-    // Для перехвата сообщений мыши
-    FOriginalWndProc: TWndMethod;
-    FLastMousePos: TPoint;
-    FMouseCapture: Boolean;
-
-    // Приватные методы
     procedure SetMediaURL(const Value: string);
     procedure SetVolume(Value: Integer);
+    procedure SetMuted(const Value: Boolean);
+    procedure SetLibPath(const Value: string);
+    procedure SetLoopPlayback(const Value: Boolean);
+    procedure SetHighQuality(const Value: Boolean);
     procedure SetUserAgent(const Value: string);
     procedure SetReferer(const Value: string);
     procedure SetHttpHeaders(const Value: TStringList);
-    procedure SetQualityMode(const Value: TVlcQualityMode);
-    procedure SetForcedBitrate(const Value: Integer);
-    procedure SetForcedResolution(const Value: string);
     function GetMuted: Boolean;
-    procedure SetMuted(const Value: Boolean);
+    function GetPlaying: Boolean;
+    function GetPaused: Boolean;
+    function GetStopped: Boolean;
+    function GetPosition: Int64;
+    function GetPlaybackPosition: Single;
+
+    procedure SetStatusBarVisible(const Value: Boolean);
+    procedure SetStatusBarText(const Value: string);
+    procedure SetStatusBarFontSize(const Value: Integer);
+    procedure SetStatusBarBackground(const Value: TColor);
+    procedure SetStatusBarTextColor(const Value: TColor);
+    procedure SetStatusBarCornerRadius(const Value: Integer);
+
+    procedure SetShowTopImage(const Value: Boolean);
+    procedure SetTopImagePath(const Value: string);
+    procedure SetTopImageWidth(const Value: Integer);
+    procedure SetTopImageHeight(const Value: Integer);
+    procedure SetTopImageMargin(const Value: Integer);
+
+    procedure UpdateVideoSize(Width, Height: Integer);
+    procedure SetupMemoryRendering;
+    procedure GetVideoSize(var Width, Height: Integer);
+    procedure AllocateVideoBuffer(Width, Height: Integer);
+    procedure SwapBuffers;
+    procedure ClearVideoBuffer;
+    procedure UpdateBitmapFromBuffer;
+    procedure CalculateFPS;
 
     procedure InitVLC;
     procedure LoadFunctions;
     procedure FreeVLC;
     procedure SetState(Value: TVlcState);
-    function GetLastErrorText: string;
-    procedure Log(const Msg: string);
     function BuildVlcOptions: TStringList;
-    function IsProtectedStream(const AUrl: string): Boolean;
-    function TestStreamProtection(const AUrl: string): Boolean;
-    procedure ApplyAppropriateHeaders(const AUrl: string);
-    procedure StopCurrentStream;
     procedure SetupEventHandlers;
-    procedure ApplyQualitySettings;
-    function GetQualityOptions: TStringList;
+    procedure TryAlternativeFormats;
 
-    // Методы для записи событий
-    procedure SendLoadingEvent(const AEvent: string; AProgress: Integer = -1);
-    procedure SendStateEvent(const AState: string);
+    function LockCallback(opaque: Pointer; planes: PPointer): Pointer; cdecl;
+    procedure UnlockCallback(opaque: Pointer; picture: Pointer; planes: PPointer); cdecl;
 
-    // Методы для буферизации и сетевых потоков
-    function GetBufferingLevel: Integer;
-    function IsNetworkStream: Boolean;
+    procedure FrameTimerTick(Sender: TObject);
+    procedure PositionTimerTick(Sender: TObject);
+    procedure HealthCheckTimerTick(Sender: TObject);
+    procedure SyncTimerTick(Sender: TObject);
+    procedure FallbackTimerTick(Sender: TObject);
 
-    // Методы для реального прогресса
-    procedure UpdateRealLoadingProgress;
-    procedure ProgressTimerTick(Sender: TObject);
-
-    // Методы для видео панели с отступами
-    procedure CreateVideoPanel;
-    procedure DestroyVideoPanel;
-    procedure UpdateVideoPanelMargins;
-
-    // Методы для текста и изображений
-    procedure SetInfoText(const Value: TDisplayTextItem);
-    procedure SetShowTextWhenIdle(const Value: Boolean);
-    procedure TextItemChanged(Sender: TObject);
-    procedure SetTopImage(const Value: TPicture);
-    procedure SetShowTopImage(const Value: Boolean);
-    procedure CreateHandle;
-    procedure DestroyWnd;
-
-    // НОВЫЕ МЕТОДЫ ДЛЯ ПЕРЕХВАТА СОБЫТИЙ МЫШИ
     procedure MainWndProc(var Message: TMessage);
     function GetShiftState: TShiftState;
-    function ScreenToVideo(const ScreenPos: TPoint): TPoint;
-    function IsPointInVideoPanel(const P: TPoint): Boolean;
+
+    procedure SafeInvalidate;
+    procedure DrawLoadingAnimation(Canvas: TCanvas);
+    procedure DrawStatusBar(Canvas: TCanvas);
+    procedure DrawDisplayText(Canvas: TCanvas);
+    procedure DrawTopImage(Canvas: TCanvas);
+    function CalculateAspectRatioFit: TRect;
+
+    function IsNetworkStream(const AUrl: string): Boolean;
+    procedure EnableAudio;
+    procedure ForceVideoUpdate;
+    procedure LoadTopImage;
+
+    procedure StartStreamHealthMonitor;
+    procedure CheckMemoryUsage;
+    procedure AdjustPerformanceSettings;
+    procedure AutoRestartCheck;
+    procedure EnhancedFreeVideoBuffer;
+    procedure ResetStreamState;
+    procedure ForceVideoRecovery;
+    procedure EmergencyMemoryOptimization;
+
+    procedure StopAllTimers;
+    procedure StopVLCPlayback;
+    procedure FreeVLCResources;
 
   protected
     procedure Paint; override;
-    procedure WndProc(var Message: TMessage); override;
     procedure Resize; override;
+    procedure CreateWnd; override;
+    procedure DestroyWnd; override;
+    procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
+    procedure DblClick; override;
+    procedure MouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint);
 
   public
-    FVideoHandle: HWND;            // Хэндл окна для вывода видео
-    FVideoPanel: TPanel;           // Панель для вывода видео
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
-    // Основные методы управления
     procedure Play;
     procedure Pause;
     procedure Stop;
-    procedure LoadMedia(const APath: string);
-    procedure UpdateVideoHandle;
+    procedure LoadMedia(const AUrl: string);
 
-    // Методы получения состояния
+    procedure SetDisplayText(const Value: string);
+    procedure SetDisplayTextVisible(const Value: Boolean);
+    procedure SetDisplayTextFontSize(const Value: Integer);
+    procedure SetDisplayTextColor(const Value: TColor);
+    procedure SetDisplayTextBackground(const Value: TColor);
+    procedure SetDisplayTextBackgroundAlpha(const Value: Integer);
+    procedure SetDisplayTextCornerRadius(const Value: Integer);
+
     function IsInitialized: Boolean;
     function IsPlaying: Boolean;
-    function IsActuallyPlaying: Boolean;
+    function IsPaused: Boolean;
+    function IsSeekable: Boolean;
+    function CanPause: Boolean;
     function GetDuration: Int64;
-    function GetPosition: Int64;
-    function GetPlaybackPosition: Single;
+    function GetVideoWidth: Integer;
+    function GetVideoHeight: Integer;
+    function HasVideo: Boolean;
     function GetPlayerStatus: string;
 
-    // Методы управления качеством
-    procedure ForceBestQuality;
-    procedure ForceWorstQuality;
-    procedure ForceAutoQuality;
-    procedure ForceCustomQuality(Bitrate: Integer; const Resolution: string);
+    // Новый метод для получения текущего URL медиа
+    function GetCurrentMediaURL: string;
 
-    // Методы работы с HTTP-заголовками
-    procedure AddHttpHeader(const AName, AValue: string);
-    procedure ClearHttpHeaders;
-    procedure SetWinkHeaders;
-    procedure SetBasicHeaders;
-
-    // Методы управления звуком
     procedure Mute;
     procedure Unmute;
     procedure ToggleMute;
     function IsMuted: Boolean;
 
-    // Методы для исправления видео вывода
-    procedure ReattachVideo;
-    procedure FixVideoOutput;
+    procedure SeekTo(Position: Single);
+    procedure SeekToTime(TimeMs: Int64);
 
-    // Методы для управления отступами видео
-    procedure SetVideoMargins(TopMargin, BottomMargin: Integer);
-    procedure ResetVideoMargins;
+    procedure AddHttpHeader(const AName, AValue: string);
+    procedure ClearHttpHeaders;
+    procedure SetWinkHeaders;
+    procedure SetBasicHeaders;
 
-    // Методы для работы с текстом и изображениями
-    procedure SetDisplayText(const Info: string);
-    procedure UpdateInfo(const Text: string);
-    procedure SetTextPositionXY(X, Y: Integer);
-    procedure SetTextFont(Size: Integer; Color: TColor; Style: TFontStyles);
-    procedure ShowAll;
-    procedure HideAll;
+    procedure EnableAudioSync(Enabled: Boolean);
+    procedure SetAudioDelay(DelayMs: Integer);
+    procedure SetTargetFPS(FPS: Integer);
+    function GetCurrentFPS: Integer;
+    procedure EnableHighPerformanceMode(Enabled: Boolean);
+    procedure ClearBuffer;
 
-    // Методы для работы с мышью
-    procedure EnableMouseEvents;
+    procedure EnableAutoRestart(Enabled: Boolean; IntervalMinutes: Integer = 60);
+    procedure ForceSoftRestart;
+    procedure ResetPerformanceSettings;
 
-    // Публичные свойства
-    property Handle: HWND read FVideoHandle;
-    property AutoDetectProtectedStreams: Boolean read FAutoDetectProtectedStreams write FAutoDetectProtectedStreams default True;
-    property ForceWinkHeaders: Boolean read FForceWinkHeaders write FForceWinkHeaders default False;
-    property LoadingProgress: Integer read FLoadingProgress;
-    property IsLoading: Boolean read FIsLoading;
-    property QualityMode: TVlcQualityMode read FQualityMode write SetQualityMode;
-    property ForcedBitrate: Integer read FForcedBitrate write SetForcedBitrate;
-    property ForcedResolution: string read FForcedResolution write SetForcedResolution;
+    procedure ShowStatusBar(const AText: string = '');
+    procedure HideStatusBar;
+    procedure UpdateStatusBar(const AText: string);
+    procedure SetStatusBarStyle(FontSize: Integer; BackgroundColor, TextColor: TColor; CornerRadius: Integer = 8);
+
+    procedure ShowDisplayText(const AText: string = '');
+    procedure HideDisplayText;
+    procedure SetDisplayTextStyle(FontSize: Integer; TextColor, BackgroundColor: TColor;
+      BackgroundAlpha: Integer = 180; CornerRadius: Integer = 8);
+
+    procedure SetTopImage(const AImagePath: string; Show: Boolean = True);
+    procedure HideTopImage;
+
+    procedure TakeSnapshot(const AFileName: string);
+
+    procedure ForceRepaint;
+
+    property State: TVlcState read FState;
     property Muted: Boolean read GetMuted write SetMuted;
-    property VideoTopMargin: Integer read FVideoTopMargin;
-    property VideoBottomMargin: Integer read FVideoBottomMargin;
+    property Playing: Boolean read GetPlaying;
+    property Paused: Boolean read GetPaused;
+    property Stopped: Boolean read GetStopped;
+    property Position: Int64 read GetPosition;
+    property PlaybackPosition: Single read GetPlaybackPosition;
+    property VideoBitmap: TBitmap read FVideoBitmap;
 
-    function GetCurrentMediaURL: string;
-    procedure SetNewParent(NewParent: TWinControl);
-    function GetActualLoadingProgress: Integer;
-    function IsPointInVideoArea(const P: TPoint): Boolean;
-
-    procedure ForceRehookMouseEvents;
   published
-    // Опубликованные свойства
-    property LibPath: string read FLibPath write FLibPath;
+    property LibPath: string read FLibPath write SetLibPath;
     property MediaURL: string read FMediaURL write SetMediaURL;
+    // Свойство для получения текущего URL медиа
+    property CurrentMediaURL: string read GetCurrentMediaURL;
     property AutoPlay: Boolean read FAutoPlay write FAutoPlay default True;
     property Volume: Integer read FVolume write SetVolume default 100;
     property UserAgent: string read FUserAgent write SetUserAgent;
     property Referer: string read FReferer write SetReferer;
     property HttpHeaders: TStringList read FHttpHeaders write SetHttpHeaders;
-    property State: TVlcState read FState;
+    property LoopPlayback: Boolean read FLoopPlayback write SetLoopPlayback default False;
+    property HighQuality: Boolean read FHighQuality write SetHighQuality default True;
 
-    // Текстовые элементы
-    property InfoText: TDisplayTextItem read FInfoText write SetInfoText;
-    property ShowTextWhenIdle: Boolean read FShowTextWhenIdle write SetShowTextWhenIdle default True;
+    property AutoRestartEnabled: Boolean read FAutoRestartEnabled write FAutoRestartEnabled default False;
+    property AutoRestartInterval: Integer read FAutoRestartInterval write FAutoRestartInterval default 60;
 
-    // Изображения
-    property TopImage: TPicture read FTopImage write SetTopImage;
-    property ShowTopImage: Boolean read FShowTopImage write SetShowTopImage default True;
+    property StatusBarVisible: Boolean read FStatusBarVisible write SetStatusBarVisible;
+    property StatusBarText: string read FStatusBarText write SetStatusBarText;
+    property StatusBarFontSize: Integer read FStatusBarFontSize write SetStatusBarFontSize;
+    property StatusBarBackground: TColor read FStatusBarBackground write SetStatusBarBackground;
+    property StatusBarTextColor: TColor read FStatusBarTextColor write SetStatusBarTextColor;
+    property StatusBarCornerRadius: Integer read FStatusBarCornerRadius write SetStatusBarCornerRadius;
 
-    // События
+    property DisplayText: string read FDisplayText write SetDisplayText;
+    property DisplayTextVisible: Boolean read FDisplayTextVisible write SetDisplayTextVisible;
+    property DisplayTextFontSize: Integer read FDisplayTextFontSize write SetDisplayTextFontSize;
+    property DisplayTextColor: TColor read FDisplayTextColor write SetDisplayTextColor;
+    property DisplayTextBackground: TColor read FDisplayTextBackground write SetDisplayTextBackground;
+    property DisplayTextBackgroundAlpha: Integer read FDisplayTextBackgroundAlpha write SetDisplayTextBackgroundAlpha;
+    property DisplayTextCornerRadius: Integer read FDisplayTextCornerRadius write SetDisplayTextCornerRadius;
+
+    property ShowTopImage: Boolean read FShowTopImage write SetShowTopImage;
+    property TopImagePath: string read FTopImagePath write SetTopImagePath;
+    property TopImageWidth: Integer read FTopImageWidth write SetTopImageWidth;
+    property TopImageHeight: Integer read FTopImageHeight write SetTopImageHeight;
+    property TopImageMargin: Integer read FTopImageMargin write SetTopImageMargin;
+
     property OnLoading: TVlcNotifyEvent read FOnLoading write FOnLoading;
     property OnPlaying: TVlcNotifyEvent read FOnPlaying write FOnPlaying;
     property OnPaused: TVlcNotifyEvent read FOnPaused write FOnPaused;
     property OnStopped: TVlcNotifyEvent read FOnStopped write FOnStopped;
     property OnEndReached: TVlcNotifyEvent read FOnEndReached write FOnEndReached;
-    property OnError: TVlcNotifyEvent read FOnError write FOnError;
+    property OnError: TVlcErrorEvent read FOnError write FOnError;
+    property OnStateChanged: TVlcNotifyEvent read FOnStateChanged write FOnStateChanged;
     property OnLog: TVlcLogEvent read FOnLog write FOnLog;
     property OnLoadingProgress: TVlcProgressEvent read FOnLoadingProgress write FOnLoadingProgress;
     property OnBuffering: TVlcProgressEvent read FOnBuffering write FOnBuffering;
-    property OnQualityChanged: TVlcNotifyEvent read FOnQualityChanged write FOnQualityChanged;
+    property OnPositionChanged: TVlcPositionEvent read FOnPositionChanged write FOnPositionChanged;
+    property OnTimeChanged: TVlcTimeEvent read FOnTimeChanged write FOnTimeChanged;
+    property OnVideoStarted: TVlcNotifyEvent read FOnVideoStarted write FOnVideoStarted;
+    property OnVideoSizeChanged: TVlcNotifyEvent read FOnVideoSizeChanged write FOnVideoSizeChanged;
 
-    // НОВЫЕ СОБЫТИЯ МЫШИ ДЛЯ ВИДЕО ПОТОКА
     property OnVideoMouseDown: TVlcMouseEvent read FOnVideoMouseDown write FOnVideoMouseDown;
     property OnVideoMouseUp: TVlcMouseEvent read FOnVideoMouseUp write FOnVideoMouseUp;
     property OnVideoMouseMove: TVlcMouseMoveEvent read FOnVideoMouseMove write FOnVideoMouseMove;
@@ -342,33 +420,17 @@ type
     property OnVideoDblClick: TVlcNotifyEvent read FOnVideoDblClick write FOnVideoDblClick;
     property OnVideoMouseWheel: TVlcMouseWheelEvent read FOnVideoMouseWheel write FOnVideoMouseWheel;
 
-    // Свойства TCustomPanel
     property Align;
-    property Alignment;
     property Anchors;
-    property BevelEdges;
-    property BevelInner;
-    property BevelKind;
-    property BevelOuter;
-    property BevelWidth;
-    property BiDiMode;
-    property BorderWidth;
-    property BorderStyle;
     property Color;
     property Constraints;
     property Ctl3D;
-    property UseDockManager default True;
-    property DockSite;
     property DoubleBuffered;
     property DragCursor;
     property DragKind;
     property DragMode;
     property Enabled;
-    property FullRepaint;
     property Font;
-    property Locked;
-    property Padding;
-    property ParentBiDiMode;
     property ParentBackground;
     property ParentColor;
     property ParentCtl3D;
@@ -379,18 +441,8 @@ type
     property ShowHint;
     property TabOrder;
     property TabStop;
-    property Touch;
-    property VerticalAlignment;
     property Visible;
-    property StyleElements;
-    property OnAlignInsertBefore;
-    property OnAlignPosition;
-    property OnCanResize;
     property OnClick;
-    property OnConstrainedResize;
-    property OnContextPopup;
-    property OnDockDrop;
-    property OnDockOver;
     property OnDblClick;
     property OnDragDrop;
     property OnDragOver;
@@ -398,951 +450,342 @@ type
     property OnEndDrag;
     property OnEnter;
     property OnExit;
-    property OnGesture;
-    property OnGetSiteInfo;
-    property OnMouseActivate;
     property OnMouseDown;
-    property OnMouseEnter;
-    property OnMouseLeave;
     property OnMouseMove;
     property OnMouseUp;
     property OnResize;
-    property OnStartDock;
-    property OnStartDrag;
-    property OnUnDock;
   end;
 
 procedure Register;
 
 implementation
 
-{ TDisplayTextItem }
+uses
+  System.AnsiStrings;
 
-constructor TDisplayTextItem.Create;
-begin
-  inherited Create;
-  FText := '';
-  FFontSize := 12;
-  FFontColor := clWhite;
-  FFontStyle := [];
-  FX := 20;
-  FY := 20;
-  FVisible := True;
-end;
-
-procedure TDisplayTextItem.Assign(Source: TPersistent);
-begin
-  if Source is TDisplayTextItem then
-  begin
-    FText := TDisplayTextItem(Source).Text;
-    FFontSize := TDisplayTextItem(Source).FontSize;
-    FFontColor := TDisplayTextItem(Source).FontColor;
-    FFontStyle := TDisplayTextItem(Source).FontStyle;
-    FX := TDisplayTextItem(Source).X;
-    FY := TDisplayTextItem(Source).Y;
-    FVisible := TDisplayTextItem(Source).Visible;
-    Changed;
-  end
-  else
-    inherited Assign(Source);
-end;
-
-procedure TDisplayTextItem.Changed;
-begin
-  if Assigned(FOnChange) then
-    FOnChange(Self);
-end;
-
-procedure TDisplayTextItem.SetText(const Value: string);
-begin
-  if FText <> Value then
-  begin
-    FText := Value;
-    Changed;
-  end;
-end;
-
-procedure TDisplayTextItem.SetFontSize(const Value: Integer);
-begin
-  if FFontSize <> Value then
-  begin
-    FFontSize := Value;
-    Changed;
-  end;
-end;
-
-procedure TDisplayTextItem.SetFontColor(const Value: TColor);
-begin
-  if FFontColor <> Value then
-  begin
-    FFontColor := Value;
-    Changed;
-  end;
-end;
-
-procedure TDisplayTextItem.SetFontStyle(const Value: TFontStyles);
-begin
-  if FFontStyle <> Value then
-  begin
-    FFontStyle := Value;
-    Changed;
-  end;
-end;
-
-procedure TDisplayTextItem.SetX(const Value: Integer);
-begin
-  if FX <> Value then
-  begin
-    FX := Value;
-    Changed;
-  end;
-end;
-
-procedure TDisplayTextItem.SetY(const Value: Integer);
-begin
-  if FY <> Value then
-  begin
-    FY := Value;
-    Changed;
-  end;
-end;
-
-procedure TDisplayTextItem.SetVisible(const Value: Boolean);
-begin
-  if FVisible <> Value then
-  begin
-    FVisible := Value;
-    Changed;
-  end;
-end;
-
-procedure Register;
-begin
-  RegisterComponents('Samples', [TVlcPlayer]);
-end;
-
-// Константы событий VLC
 const
-  libvlc_MediaPlayerBuffering = 3;
-  libvlc_MediaPlayerPlaying = 4;
-  libvlc_MediaPlayerPaused = 5;
-  libvlc_MediaPlayerStopped = 6;
-  libvlc_MediaPlayerEndReached = 7;
-  libvlc_MediaPlayerEncounteredError = 8;
+  libvlc_MediaPlayerPlaying = 0;
+  libvlc_MediaPlayerPaused = 1;
+  libvlc_MediaPlayerStopped = 2;
+  libvlc_MediaPlayerEndReached = 3;
+  libvlc_MediaPlayerEncounteredError = 4;
+  libvlc_MediaPlayerTimeChanged = 5;
+  libvlc_MediaPlayerPositionChanged = 6;
+  libvlc_MediaPlayerVideoSizeChanged = 7;
+  libvlc_MediaPlayerBuffering = 27;
+  libvlc_MediaPlayerOpening = 28;
 
-// Callback функция для обработки событий VLC
-procedure VlcEventCallback(p_event: Pointer; user_data: Pointer); cdecl;
 var
-  Player: TVlcPlayer;
-  EventType: Integer;
-begin
-  Player := TVlcPlayer(user_data);
-  if not Assigned(Player) then Exit;
+  GDestroyedPlayers: TList<TVlcPlayer>;
 
-  // Получаем тип события
-  EventType := PInteger(p_event)^;
-
-  case EventType of
-    libvlc_MediaPlayerBuffering:
-      begin
-        Player.Log('Буферизация...');
-        Player.SendLoadingEvent('BUFFERING', 50);
-        if Assigned(Player.FOnBuffering) then
-          Player.FOnBuffering(Player, 50);
-      end;
-
-    libvlc_MediaPlayerPlaying:
-      begin
-        // Останавливаем таймер прогресса
-        Player.FProgressTimer.Enabled := False;
-
-        Player.SetState(vlcPlaying);
-
-        // Устанавливаем 100% прогресс при начале воспроизведения
-        Player.FLoadingProgress := 100;
-        Player.FIsLoading := False;
-
-        if Assigned(Player.FOnLoadingProgress) then
-          Player.FOnLoadingProgress(Player, 100);
-
-        Player.SendLoadingEvent('PLAYING');
-        Player.SendStateEvent('PLAYING');
-        Player.Log('Воспроизведение началось');
-      end;
-
-    libvlc_MediaPlayerPaused:
-      begin
-        Player.SetState(vlcPaused);
-        Player.Log('Воспроизведение приостановлено');
-        Player.SendLoadingEvent('PAUSED');
-        Player.SendStateEvent('PAUSED');
-      end;
-
-    libvlc_MediaPlayerStopped:
-      begin
-        // Останавливаем таймер прогресса
-        Player.FProgressTimer.Enabled := False;
-
-        Player.SetState(vlcStopped);
-        Player.FIsLoading := False;
-        Player.FLoadingProgress := 0;
-        Player.Log('Воспроизведение остановлено');
-
-        Player.SendLoadingEvent('STOPPED');
-        Player.SendStateEvent('STOPPED');
-      end;
-
-    libvlc_MediaPlayerEndReached:
-      begin
-        Player.Log('Воспроизведение завершено');
-
-        Player.SendLoadingEvent('END_REACHED');
-        if Assigned(Player.FOnEndReached) then
-          Player.FOnEndReached(Player);
-      end;
-
-    libvlc_MediaPlayerEncounteredError:
-      begin
-        // Останавливаем таймер прогресса
-        Player.FProgressTimer.Enabled := False;
-
-        Player.SetState(vlcError);
-        Player.Log('Ошибка воспроизведения');
-        Player.FIsLoading := False;
-        Player.FLoadingProgress := 0;
-
-        Player.SendLoadingEvent('ERROR');
-        Player.SendStateEvent('ERROR');
-      end;
-  end;
-end;
+procedure VlcEventCallback(p_event: Pointer; user_data: Pointer); cdecl; forward;
+function VlcLockCallback(opaque: Pointer; planes: PPointer): Pointer; cdecl; forward;
+procedure VlcUnlockCallback(opaque: Pointer; picture: Pointer; planes: PPointer); cdecl; forward;
+procedure VlcDisplayCallback(opaque: Pointer; picture: Pointer); cdecl; forward;
 
 { TVlcPlayer }
 
-function TVlcPlayer.IsPointInVideoArea(const P: TPoint): Boolean;
-begin
-  Result := False;
-  if FVideoPanel = nil then Exit;
-
-  Result := (P.X >= FVideoPanel.Left) and
-            (P.Y >= FVideoPanel.Top) and
-            (P.X < FVideoPanel.Left + FVideoPanel.Width) and
-            (P.Y < FVideoPanel.Top + FVideoPanel.Height);
-end;
-
-procedure TVlcPlayer.ForceRehookMouseEvents;
-begin
-  Log('ForceRehookMouseEvents: Starting forced mouse hook reinitialization...');
-
-  try
-    // 1. Временно отключаем перехват
-    if Assigned(FOriginalWndProc) then
-    begin
-      WindowProc := FOriginalWndProc;
-      Log('ForceRehookMouseEvents: Original WndProc restored temporarily');
-    end;
-
-    // 2. Ждем немного для стабильности
-    Sleep(10);
-
-    // 3. Принудительно обновляем видео handle
-    UpdateVideoHandle;
-
-    if FVideoHandle <> 0 then
-    begin
-      Log(Format('ForceRehookMouseEvents: Video handle updated to %d', [FVideoHandle]));
-    end
-    else
-    begin
-      Log('ForceRehookMouseEvents: WARNING - Video handle is zero!');
-    end;
-
-    // 4. Снова включаем перехват
-    FOriginalWndProc := WindowProc;
-    WindowProc := MainWndProc;
-
-    // 5. Принудительно обновляем геометрию
-    UpdateVideoPanelMargins;
-
-    // 6. Логируем состояние
-    if FVideoPanel <> nil then
-    begin
-      Log(Format('ForceRehookMouseEvents: Video panel at [%d,%d,%d,%d]',
-        [FVideoPanel.Left, FVideoPanel.Top, FVideoPanel.Width, FVideoPanel.Height]));
-    end
-    else
-    begin
-      Log('ForceRehookMouseEvents: WARNING - Video panel is nil!');
-    end;
-
-    Log('ForceRehookMouseEvents: Mouse hook force re-established successfully');
-
-  except
-    on E: Exception do
-    begin
-      Log(Format('ForceRehookMouseEvents: ERROR - %s', [E.Message]));
-      // Пытаемся восстановить перехват даже при ошибке
-      if Assigned(FOriginalWndProc) then
-      begin
-        FOriginalWndProc := WindowProc;
-        WindowProc := MainWndProc;
-        Log('ForceRehookMouseEvents: Emergency mouse hook restoration attempted');
-      end;
-    end;
-  end;
-end;
-
-// НОВЫЕ МЕТОДЫ ДЛЯ ПЕРЕХВАТА СОБЫТИЙ МЫШИ
-procedure TVlcPlayer.MainWndProc(var Message: TMessage);
-var
-  Shift: TShiftState;
-  WheelDelta: Integer;
-  MousePos, VideoPos: TPoint;
-  Handled: Boolean;
-
-  function GetMouseButton: TMouseButton;
-  begin
-    case Message.Msg of
-      WM_LBUTTONDOWN, WM_LBUTTONUP, WM_LBUTTONDBLCLK: Result := mbLeft;
-      WM_RBUTTONDOWN, WM_RBUTTONUP, WM_RBUTTONDBLCLK: Result := mbRight;
-      WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MBUTTONDBLCLK: Result := mbMiddle;
-    else
-      Result := mbLeft;
-    end;
-  end;
-
-begin
-  Handled := False;
-  Shift := GetShiftState;
-
-  case Message.Msg of
-    WM_MOUSEWHEEL:
-      begin
-        if IsPointInVideoPanel(SmallPointToPoint(TSmallPoint(Message.LParam))) then
-        begin
-          WheelDelta := SmallInt(Message.WParam shr 16);
-          MousePos := SmallPointToPoint(TSmallPoint(Message.LParam));
-          VideoPos := ScreenToVideo(MousePos);
-
-          Log(Format('MAIN MOUSEWHEEL: Delta=%d, Screen(%d,%d) -> Video(%d,%d)',
-            [WheelDelta, MousePos.X, MousePos.Y, VideoPos.X, VideoPos.Y]));
-
-          if Assigned(FOnVideoMouseWheel) then
-            FOnVideoMouseWheel(Self, Shift, WheelDelta, VideoPos);
-
-          Message.Result := 1;
-          Handled := True;
-        end;
-      end;
-
-    WM_LBUTTONDOWN, WM_RBUTTONDOWN, WM_MBUTTONDOWN:
-      begin
-        if IsPointInVideoPanel(SmallPointToPoint(TSmallPoint(Message.LParam))) then
-        begin
-          MousePos := SmallPointToPoint(TSmallPoint(Message.LParam));
-          VideoPos := ScreenToVideo(MousePos);
-
-          Log(Format('MAIN MOUSEDOWN: Button=%d, Screen(%d,%d) -> Video(%d,%d)',
-            [Ord(GetMouseButton), MousePos.X, MousePos.Y, VideoPos.X, VideoPos.Y]));
-
-          if Assigned(FOnVideoMouseDown) then
-            FOnVideoMouseDown(Self, GetMouseButton, Shift, VideoPos.X, VideoPos.Y);
-
-          // Захватываем мышь для отслеживания перемещения
-          SetCapture(Handle);
-          FMouseCapture := True;
-          FLastMousePos := MousePos;
-
-          Handled := True;
-        end;
-      end;
-
-    WM_LBUTTONUP, WM_RBUTTONUP, WM_MBUTTONUP:
-      begin
-        if FMouseCapture then
-        begin
-          ReleaseCapture;
-          FMouseCapture := False;
-
-          MousePos := SmallPointToPoint(TSmallPoint(Message.LParam));
-          VideoPos := ScreenToVideo(MousePos);
-
-          Log(Format('MAIN MOUSEUP: Button=%d, Screen(%d,%d) -> Video(%d,%d)',
-            [Ord(GetMouseButton), MousePos.X, MousePos.Y, VideoPos.X, VideoPos.Y]));
-
-          if Assigned(FOnVideoMouseUp) then
-            FOnVideoMouseUp(Self, GetMouseButton, Shift, VideoPos.X, VideoPos.Y);
-
-          // Вызываем Click для левой кнопки
-          if (GetMouseButton = mbLeft) and Assigned(FOnVideoClick) then
-            FOnVideoClick(Self);
-
-          Handled := True;
-        end;
-      end;
-
-    WM_LBUTTONDBLCLK, WM_RBUTTONDBLCLK, WM_MBUTTONDBLCLK:
-      begin
-        if IsPointInVideoPanel(SmallPointToPoint(TSmallPoint(Message.LParam))) then
-        begin
-          MousePos := SmallPointToPoint(TSmallPoint(Message.LParam));
-          VideoPos := ScreenToVideo(MousePos);
-
-          Log(Format('MAIN MOUSEDBLCLK: Button=%d, Screen(%d,%d) -> Video(%d,%d)',
-            [Ord(GetMouseButton), MousePos.X, MousePos.Y, VideoPos.X, VideoPos.Y]));
-
-          // Вызываем двойной клик для левой кнопки
-          if (GetMouseButton = mbLeft) and Assigned(FOnVideoDblClick) then
-            FOnVideoDblClick(Self);
-
-          Handled := True;
-        end;
-      end;
-
-    WM_MOUSEMOVE:
-      begin
-        if FMouseCapture then
-        begin
-          MousePos := SmallPointToPoint(TSmallPoint(Message.LParam));
-
-          // Фильтруем частые сообщения
-          if (Abs(MousePos.X - FLastMousePos.X) > 2) or
-             (Abs(MousePos.Y - FLastMousePos.Y) > 2) then
-          begin
-            VideoPos := ScreenToVideo(MousePos);
-
-            if Random(5) = 0 then // Логируем каждое 5-е сообщение
-              Log(Format('MAIN MOUSEMOVE: Screen(%d,%d) -> Video(%d,%d)',
-                [MousePos.X, MousePos.Y, VideoPos.X, VideoPos.Y]));
-
-            if Assigned(FOnVideoMouseMove) then
-              FOnVideoMouseMove(Self, Shift, VideoPos.X, VideoPos.Y);
-
-            FLastMousePos := MousePos;
-          end;
-        end;
-      end;
-
-    WM_CAPTURECHANGED:
-      begin
-        FMouseCapture := False;
-        Log('Mouse capture lost');
-      end;
-  end;
-
-  if not Handled then
-  begin
-    // Передаем сообщение оригинальному обработчику
-    if Assigned(FOriginalWndProc) then
-      FOriginalWndProc(Message)
-    else
-      inherited WndProc(Message);
-  end;
-end;
-
-function TVlcPlayer.GetShiftState: TShiftState;
-begin
-  Result := [];
-  if GetKeyState(VK_SHIFT) < 0 then Include(Result, ssShift);
-  if GetKeyState(VK_CONTROL) < 0 then Include(Result, ssCtrl);
-  if GetKeyState(VK_MENU) < 0 then Include(Result, ssAlt);
-  if GetKeyState(VK_LBUTTON) < 0 then Include(Result, ssLeft);
-  if GetKeyState(VK_RBUTTON) < 0 then Include(Result, ssRight);
-  if GetKeyState(VK_MBUTTON) < 0 then Include(Result, ssMiddle);
-end;
-
-function TVlcPlayer.ScreenToVideo(const ScreenPos: TPoint): TPoint;
-begin
-  Result := ScreenToClient(ScreenPos);
-  if FVideoPanel <> nil then
-  begin
-    // Преобразуем координаты компонента в координаты видео панели
-    Result.X := Result.X - FVideoPanel.Left;
-    Result.Y := Result.Y - FVideoPanel.Top;
-
-    // Ограничиваем координаты размерами видео панели
-    Result.X := Max(0, Min(Result.X, FVideoPanel.Width - 1));
-    Result.Y := Max(0, Min(Result.Y, FVideoPanel.Height - 1));
-  end;
-end;
-
-function TVlcPlayer.IsPointInVideoPanel(const P: TPoint): Boolean;
-begin
-  Result := False;
-  if FVideoPanel = nil then Exit;
-
-  var LocalPoint := ScreenToClient(P);
-  Result := PtInRect(FVideoPanel.BoundsRect, LocalPoint);
-end;
-
-procedure TVlcPlayer.EnableMouseEvents;
-begin
-  Log('Активация перехвата событий мыши...');
-
-  // Принудительно обновляем handle
-  UpdateVideoHandle;
-
-  // Убедимся что перехват активен
-  if not Assigned(FOriginalWndProc) then
-  begin
-    FOriginalWndProc := WindowProc;
-    WindowProc := MainWndProc;
-  end;
-
-  Log('Перехват событий мыши активирован');
-end;
-
-procedure TVlcPlayer.SetNewParent(NewParent: TWinControl);
-begin
-  if FPlayer = nil then Exit;
-
-  // Останавливаем воспроизведение
-  if IsPlaying then
-    T_libvlc_media_player_stop(FPlayer);
-
-  // Меняем родителя
-  Parent := NewParent;
-
-  // Обновляем видео handle
-  if NewParent <> nil then
-  begin
-    UpdateVideoHandle;
-    if FVideoHandle <> 0 then
-    begin
-      T_libvlc_media_player_set_hwnd(FPlayer, Pointer(FVideoHandle));
-      Log('Video output установлен на новый parent');
-    end;
-  end;
-
-  // Перезапускаем воспроизведение, если было запущено
-  if FState = vlcPlaying then
-    T_libvlc_media_player_play(FPlayer);
-end;
-
-procedure TVlcPlayer.CreateVideoPanel;
-begin
-  if FVideoPanel = nil then
-  begin
-    FVideoPanel := TPanel.Create(Self);
-    FVideoPanel.Parent := Self;
-
-    // Устанавливаем отступы
-    FVideoTopMargin := 50;
-    FVideoBottomMargin := 20;
-    UpdateVideoPanelMargins;
-
-    FVideoPanel.BevelOuter := bvNone;
-    FVideoPanel.Color := clBlack; // Сделаем красным для тестирования видимости
-    FVideoPanel.ParentBackground := False;
-    FVideoPanel.Visible := True;
-
-    // ВАЖНО: Отключаем стандартную обработку мыши для видео панели
-    FVideoPanel.Enabled := False; // Это предотвратит конфликты с VLC
-
-    FVideoPanel.HandleNeeded;
-    FVideoHandle := FVideoPanel.Handle;
-
-    Log('Видео панель создана (красная для теста), Handle: ' + IntToStr(FVideoHandle));
-    Log('Мышь: события будут перехватываться основным компонентом');
-  end;
-end;
-
-procedure TVlcPlayer.DestroyVideoPanel;
-begin
-  if FVideoPanel <> nil then
-  begin
-    FVideoPanel.Free;
-    FVideoPanel := nil;
-    FVideoHandle := 0;
-  end;
-end;
-
-procedure TVlcPlayer.UpdateVideoHandle;
-begin
-  if FVideoPanel = nil then
-    CreateVideoPanel;
-
-  if FVideoPanel <> nil then
-  begin
-    FVideoHandle := FVideoPanel.Handle;
-
-    // Убедимся, что окно действительно создано
-    if IsWindow(FVideoHandle) then
-    begin
-      Log('Video handle обновлен: ' + IntToStr(FVideoHandle));
-    end
-    else
-    begin
-      Log('Ошибка: Video handle невалиден');
-    end;
-  end;
-end;
-
-procedure TVlcPlayer.UpdateVideoPanelMargins;
-begin
-  if FVideoPanel <> nil then
-  begin
-    // ИСПОЛЬЗУЕМ ClientWidth вместо Width!
-    var NewWidth := ClientWidth;
-    var NewHeight := ClientHeight - FVideoTopMargin - FVideoBottomMargin;
-
-    if NewWidth < 10 then NewWidth := 10;
-    if NewHeight < 10 then NewHeight := 10;
-
-    FVideoPanel.SetBounds(
-      0,
-      FVideoTopMargin,
-      NewWidth,
-      NewHeight
-    );
-
-    Log(Format('VIDEO PANEL UPDATED: [L:%d,T:%d,W:%d,H:%d] (Client: %dx%d, Bounds: %dx%d)',
-      [FVideoPanel.Left, FVideoPanel.Top, FVideoPanel.Width, FVideoPanel.Height,
-       ClientWidth, ClientHeight, Width, Height]));
-  end;
-end;
-procedure TVlcPlayer.SetVideoMargins(TopMargin, BottomMargin: Integer);
-begin
-  if (FVideoTopMargin <> TopMargin) or (FVideoBottomMargin <> BottomMargin) then
-  begin
-    FVideoTopMargin := TopMargin;
-    FVideoBottomMargin := BottomMargin;
-
-    Log(Format('Установлены новые отступы: верх=%dpx, низ=%dpx', [TopMargin, BottomMargin]));
-
-    // Обновляем положение видео панели
-    UpdateVideoPanelMargins;
-
-    // Перерисовываем компонент
-    Invalidate;
-  end;
-end;
-
-procedure TVlcPlayer.ResetVideoMargins;
-begin
-  SetVideoMargins(60, 60); // 60px сверху и снизу по умолчанию
-end;
-
 constructor TVlcPlayer.Create(AOwner: TComponent);
+var
+  I: Integer;
 begin
   inherited Create(AOwner);
 
-  // Настройка внешнего вида панели
   Width := 320;
   Height := 240;
   Color := clBlack;
   BevelOuter := bvNone;
+  DoubleBuffered := True;
   ParentBackground := False;
-
-  // Устанавливаем стиль для корректного отображения видео
-  ControlStyle := ControlStyle + [csOpaque, csAcceptsControls];
-
-  // Инициализация видео панели
-  FVideoPanel := nil;
 
   FLibPath := 'libvlc.dll';
   FHttpHeaders := TStringList.Create;
   FAutoPlay := True;
   FVolume := 100;
   FState := vlcIdle;
-  FAutoDetectProtectedStreams := True;
-  FForceWinkHeaders := False;
-  FIsLoading := False;
-  FLoadingProgress := 0;
-  FQualityMode := qmAuto;
-  FForcedBitrate := 0;
-  FForcedResolution := '';
   FMuted := False;
+  FLoopPlayback := False;
+  FHighQuality := True;
 
-  // Инициализация отступов
-  FVideoTopMargin := 60;
-  FVideoBottomMargin := 60;
+  for I := 0 to 1 do
+    FVideoBuffer[I] := nil;
+  FBackBuffer := nil;
 
-  // Инициализация новых полей для прогресса
-  FLoadStartTime := 0;
-  FLastProgressUpdate := 0;
+  FVideoWidth := 0;
+  FVideoHeight := 0;
+  FVideoPitch := 0;
+  FVideoBufferSize := 0;
+  FCurrentBuffer := 0;
+  FFrameReady := False;
+  FBufferValid := False;
 
-  // Создаем таймер для обновления прогресса загрузки
-  FProgressTimer := TTimer.Create(Self);
-  FProgressTimer.Interval := 500;
-  FProgressTimer.Enabled := False;
-  FProgressTimer.OnTimer := ProgressTimerTick;
+  FLastFrameTime := 0;
+  FFrameCount := 0;
+  FLastFpsTime := 0;
+  FCurrentFPS := 0;
+  FTargetFPS := 30;
 
-  // Инициализация текстовых элементов
-  FInfoText := TDisplayTextItem.Create;
-  FInfoText.Text := '';
-  FInfoText.FontSize := 10;
-  FInfoText.FontColor := clWhite;
-  FInfoText.X := 20;
-  FInfoText.Y := Height - 20;
-  FInfoText.OnChange := TextItemChanged;
+  FAdjustedCache := False;
+  FAutoRestartEnabled := False;
+  FAutoRestartInterval := 60;
+  FLastFrameUpdateTime := 0;
+  FLastMemoryCheck := 0;
+  FStreamStartTime := 0;
 
-  FShowTextWhenIdle := True;
+  FShowLoading := False;
+  FFirstFrameTime := 0;
+  FAnimationHideDelay := 1000;
+  FLoadingStage := 'Подключение...';
 
-  // Инициализация изображений
-  FTopImage := TPicture.Create;
-  FShowTopImage := True;
+  FAudioSyncEnabled := True;
+  FLastAudioTime := 0;
+  FAudioDelay := 0;
 
-  // Инициализация перехвата мыши
+  FStatusBarVisible := False;
+  FStatusBarText := '';
+  FStatusBarFontSize := 12;
+  FStatusBarBackground := clBlack;
+  FStatusBarTextColor := clWhite;
+  FStatusBarCornerRadius := 4;
+
+  FDisplayText := '';
+  FDisplayTextVisible := False;
+  FDisplayTextFontSize := 14;
+  FDisplayTextColor := clWhite;
+  FDisplayTextBackground := clBlack;
+  FDisplayTextBackgroundAlpha := 180;
+  FDisplayTextCornerRadius := 8;
+
+  FShowTopImage := False;
+  FTopImage := TPNGImage.Create;
+  FTopImagePath := '';
+  FTopImageWidth := 45;
+  FTopImageHeight := 45;
+  FTopImageMargin := 10;
+
+  FTempRestartURL := '';
+  FTempRestartPosition := 0;
+
+  FAudioEnabled := False;
+  FVideoStarted := False;
+  FIsLoading := False;
+  FShutdownMode := False;
+
   FOriginalWndProc := nil;
   FMouseCapture := False;
-  FLastMousePos := Point(0, 0);
+  FLastMouseMoveTime := 0;
 
-  // ПЕРЕХВАТЫВАЕМ СООБЩЕНИЯ НА УРОВНЕ ОСНОВНОГО КОМПОНЕНТА
-  FOriginalWndProc := WindowProc;
-  WindowProc := MainWndProc;
+  FFrameLock := TCriticalSection.Create;
 
-  // Устанавливаем базовые заголовки по умолчанию
+  FVideoBitmap := TBitmap.Create;
+  FVideoBitmap.PixelFormat := pf32bit;
+  FVideoBitmap.Width := 1;
+  FVideoBitmap.Height := 1;
+
+  FFrameTimer := TTimer.Create(Self);
+  FFrameTimer.Interval := 33;
+  FFrameTimer.OnTimer := FrameTimerTick;
+  FFrameTimer.Enabled := False;
+
+  FPositionTimer := TTimer.Create(Self);
+  FPositionTimer.Interval := 200;
+  FPositionTimer.OnTimer := PositionTimerTick;
+  FPositionTimer.Enabled := False;
+
+  FHealthTimer := TTimer.Create(Self);
+  FHealthTimer.Interval := 30000;
+  FHealthTimer.OnTimer := HealthCheckTimerTick;
+  FHealthTimer.Enabled := False;
+
+  FSyncTimer := TTimer.Create(Self);
+  FSyncTimer.Interval := 100;
+  FSyncTimer.OnTimer := SyncTimerTick;
+  FSyncTimer.Enabled := False;
+
+  FFallbackTimer := TTimer.Create(Self);
+  FFallbackTimer.Interval := 15000;
+  FFallbackTimer.OnTimer := FallbackTimerTick;
+  FFallbackTimer.Enabled := False;
+
   SetBasicHeaders;
-
-  Log('VLC Player создан. Перехват событий мыши активирован.');
 end;
-
-
 
 destructor TVlcPlayer.Destroy;
 begin
-  // Обнуляем события для избежания access violation
-  FOnLog := nil;
-  FOnLoadingProgress := nil;
-  FOnBuffering := nil;
-  FOnQualityChanged := nil;
+  FShutdownMode := True;
 
-  // ОБНУЛЯЕМ СОБЫТИЯ МЫШИ
-  FOnVideoMouseDown := nil;
-  FOnVideoMouseUp := nil;
-  FOnVideoMouseMove := nil;
-  FOnVideoClick := nil;
-  FOnVideoDblClick := nil;
-  FOnVideoMouseWheel := nil;
+  StopAllTimers;
 
-  // Восстанавливаем оригинальный WndProc
-  if Assigned(FOriginalWndProc) then
-    WindowProc := FOriginalWndProc;
+  StopVLCPlayback;
 
-  // Останавливаем таймер
-  FProgressTimer.Enabled := False;
+  FreeVLCResources;
 
-  // Уничтожаем видео панель
-  DestroyVideoPanel;
+  EnhancedFreeVideoBuffer;
 
-  // Освобождаем ресурсы VLC
-  FreeVLC;
+  FreeAndNil(FHttpHeaders);
+  FreeAndNil(FVideoBitmap);
+  FreeAndNil(FFrameLock);
 
-  // Освобождаем текстовые элементы и изображения
-  FInfoText.Free;
-  FTopImage.Free;
+  FreeAndNil(FTopImage);
 
-  // Освобождаем объекты
-  FHttpHeaders.Free;
-  FProgressTimer.Free;
+  FreeAndNil(FHealthTimer);
+  FreeAndNil(FFrameTimer);
+  FreeAndNil(FPositionTimer);
+  FreeAndNil(FSyncTimer);
+  FreeAndNil(FFallbackTimer);
 
   inherited Destroy;
 end;
 
-
-
-procedure TVlcPlayer.TextItemChanged(Sender: TObject);
+procedure TVlcPlayer.HandlePlayingEvent;
 begin
-  Invalidate;
+  if (csDestroying in ComponentState) then Exit;
+
+  if not FAudioEnabled then
+    EnableAudio();
+
+  SetState(vlcPlaying);
+  FIsLoading := False;
+  FShowLoading := False;
+
+  if FSyncTimer <> nil then
+    FSyncTimer.Enabled := True;
+
+  if Assigned(FOnVideoStarted) then
+    FOnVideoStarted(Self);
+
+  if Assigned(FOnPlaying) then
+    FOnPlaying(Self);
 end;
 
-procedure TVlcPlayer.SetInfoText(const Value: TDisplayTextItem);
+procedure TVlcPlayer.HandlePausedEvent;
 begin
-  FInfoText.Assign(Value);
+  if (csDestroying in ComponentState) then Exit;
+
+  SetState(vlcPaused);
+
+  if FSyncTimer <> nil then
+    FSyncTimer.Enabled := False;
+
+  if Assigned(FOnPaused) then
+    FOnPaused(Self);
 end;
 
-procedure TVlcPlayer.SetShowTextWhenIdle(const Value: Boolean);
+procedure TVlcPlayer.HandleStoppedEvent;
 begin
-  if FShowTextWhenIdle <> Value then
+  if (csDestroying in ComponentState) then Exit;
+
+  if FSyncTimer <> nil then
+    FSyncTimer.Enabled := False;
+
+  SetState(vlcStopped);
+  FIsLoading := False;
+  FShowLoading := False;
+
+  if Assigned(FOnStopped) then
+    FOnStopped(Self);
+end;
+
+procedure TVlcPlayer.HandleEndReachedEvent;
+begin
+  if (csDestroying in ComponentState) then Exit;
+
+  if FLoopPlayback then
   begin
-    FShowTextWhenIdle := Value;
-    Invalidate;
-  end;
-end;
-
-procedure TVlcPlayer.SetTopImage(const Value: TPicture);
-begin
-  FTopImage.Assign(Value);
-  Invalidate;
-end;
-
-procedure TVlcPlayer.SetShowTopImage(const Value: Boolean);
-begin
-  if FShowTopImage <> Value then
-  begin
-    FShowTopImage := Value;
-    Invalidate;
-  end;
-end;
-
-procedure TVlcPlayer.CreateHandle;
-begin
-  inherited CreateHandle;
-
-  // Создаем видео панель при создании handle
-  UpdateVideoHandle;
-
-  if FVideoHandle <> 0 then
-  begin
-    // Устанавливаем стили окна для корректного отображения видео
-    SetWindowLong(FVideoHandle, GWL_STYLE,
-      GetWindowLong(FVideoHandle, GWL_STYLE) or WS_CLIPCHILDREN or WS_CLIPSIBLINGS);
-
-    Log('Handle компонента создан и настроен для видео: ' + IntToStr(FVideoHandle));
-  end;
-end;
-
-procedure TVlcPlayer.DestroyWnd;
-begin
-  // Останавливаем воспроизведение перед уничтожением окна
-  Stop;
-  inherited DestroyWnd;
-end;
-
-procedure TVlcPlayer.Resize;
-begin
-  inherited Resize;
-
-  Log(Format('RESIZE: Client=%dx%d, Bounds=%dx%d',
-    [ClientWidth, ClientHeight, Width, Height]));
-
-  // Обновляем размер видео панели с учетом отступов
-  UpdateVideoPanelMargins;
-
-  // Обновляем позицию текста
-  FInfoText.Y := ClientHeight - 20;
-
-  ForceRehookMouseEvents;
-
-  // Принудительно переустанавливаем видео вывод при изменении размера
-  if (FPlayer <> nil) and (FVideoHandle <> 0) and IsPlaying then
-  begin
-    Sleep(50);
-    T_libvlc_media_player_set_hwnd(FPlayer, Pointer(FVideoHandle));
-  end;
-end;
-
-procedure TVlcPlayer.WndProc(var Message: TMessage);
-begin
-  if Message.Msg = WM_USER + 1 then
-  begin
-    if (FPlayer <> nil) and (FVideoHandle <> 0) then
-    begin
-      T_libvlc_media_player_set_hwnd(FPlayer, Pointer(FVideoHandle));
-      Log('Повторная установка video output после начала воспроизведения');
-    end;
+    FFirstFrameTime := 0;
+    SeekTo(0);
+    Sleep(100);
+    Play;
   end
   else
-    inherited WndProc(Message);
+  begin
+    if Assigned(FOnEndReached) then
+      FOnEndReached(Self);
+  end;
 end;
 
-procedure TVlcPlayer.ReattachVideo;
+procedure TVlcPlayer.HandleErrorEvent;
 begin
-  if (FPlayer <> nil) and (FVideoHandle <> 0) then
+  if (csDestroying in ComponentState) then Exit;
+
+  if FSyncTimer <> nil then
+    FSyncTimer.Enabled := False;
+
+  SetState(vlcError);
+  FIsLoading := False;
+  FShowLoading := False;
+
+  if Assigned(FOnError) then
+      FOnError(Self, -1, 'VLC error event');
+end;
+
+procedure TVlcPlayer.HandleBufferingEvent;
+begin
+  if (csDestroying in ComponentState) then Exit;
+
+  SetState(vlcBuffering);
+
+  if not FShowLoading then
   begin
-    Log('Принудительная переустановка видео вывода');
-    T_libvlc_media_player_set_hwnd(FPlayer, Pointer(FVideoHandle));
-
-    // Даем время на применение изменений
-    Sleep(100);
-
+    FShowLoading := True;
     Invalidate;
   end;
+
+  if Assigned(FOnBuffering) then
+    FOnBuffering(Self, 0);
 end;
 
-procedure TVlcPlayer.FixVideoOutput;
+procedure TVlcPlayer.HandleOpeningEvent;
 begin
-  if FPlayer = nil then Exit;
+  if (csDestroying in ComponentState) then Exit;
 
-  Log('Исправление видео вывода...');
+  SetState(vlcLoading);
+  FIsLoading := True;
+  FFirstFrameTime := 0;
 
-  // Останавливаем воспроизведение
-  T_libvlc_media_player_stop(FPlayer);
-  Sleep(100);
+  FShowLoading := True;
+  Invalidate;
+end;
 
-  // Переустанавливаем handle
-  if FVideoHandle <> 0 then
+procedure TVlcPlayer.HandleTimeChangedEvent;
+begin
+  if (csDestroying in ComponentState) then Exit;
+
+  FLastAudioTime := GetPosition;
+
+  if Assigned(FOnTimeChanged) then
+    FOnTimeChanged(Self, FLastAudioTime);
+end;
+
+procedure TVlcPlayer.HandlePositionChangedEvent;
+begin
+  if (csDestroying in ComponentState) then Exit;
+
+  if Assigned(FOnPositionChanged) then
+    FOnPositionChanged(Self, GetPlaybackPosition);
+end;
+
+function TVlcPlayer.IsPlaying: Boolean;
+begin
+  Result := FState = vlcPlaying;
+end;
+
+function TVlcPlayer.IsPaused: Boolean;
+begin
+  Result := FState = vlcPaused;
+end;
+
+procedure TVlcPlayer.SetLibPath(const Value: string);
+begin
+  if FLibPath <> Value then
   begin
-    T_libvlc_media_player_set_hwnd(FPlayer, Pointer(FVideoHandle));
-    Log('Video output переустановлен на handle: ' + IntToStr(FVideoHandle));
+    FLibPath := Value;
+    if IsInitialized then
+    begin
+      FreeVLC;
+      InitVLC;
+    end;
   end;
-
-  // Запускаем воспроизведение
-  Sleep(100);
-  T_libvlc_media_player_play(FPlayer);
-end;
-
-procedure TVlcPlayer.Paint;
-var
-  ImgRect: TRect;
-begin
-  inherited Paint;
-
-  // Рисуем черный фон если видео не воспроизводится
-  if FState = vlcIdle then
-  begin
-    Canvas.Brush.Color := clBlack;
-    Canvas.FillRect(ClientRect);
-  end;
-
-  // Верхнее изображение (всегда отображается)
-  if FShowTopImage and (FTopImage.Width > 0) and (FTopImage.Height > 0) then
-  begin
-    // Располагаем изображение в правом верхнем углу
-    ImgRect := Rect(Width - 45, 0, Width, 45);
-    Canvas.StretchDraw(ImgRect, FTopImage.Graphic);
-  end;
-
-  // Нижний текст (всегда отображается)
-  if FShowTextWhenIdle and FInfoText.Visible and (FInfoText.Text <> '') then
-  begin
-    Canvas.Font.Size := FInfoText.FontSize;
-    Canvas.Font.Color := FInfoText.FontColor;
-    Canvas.Font.Style := FInfoText.FontStyle;
-    Canvas.TextOut(FInfoText.X, FInfoText.Y, FInfoText.Text);
-  end;
-end;
-
-procedure TVlcPlayer.SetDisplayText(const Info: string);
-begin
-  FInfoText.Text := Info;
-  Invalidate;
-end;
-
-procedure TVlcPlayer.UpdateInfo(const Text: string);
-begin
-  FInfoText.Text := Text;
-  Invalidate;
-end;
-
-procedure TVlcPlayer.SetTextPositionXY(X, Y: Integer);
-begin
-  FInfoText.X := X;
-  FInfoText.Y := Y;
-  Invalidate;
-end;
-
-procedure TVlcPlayer.SetTextFont(Size: Integer; Color: TColor; Style: TFontStyles);
-begin
-  FInfoText.FontSize := Size;
-  FInfoText.FontColor := Color;
-  FInfoText.FontStyle := Style;
-  Invalidate;
-end;
-
-procedure TVlcPlayer.ShowAll;
-begin
-  FInfoText.Visible := True;
-  FShowTopImage := True;
-  Invalidate;
-end;
-
-procedure TVlcPlayer.HideAll;
-begin
-  FInfoText.Visible := False;
-  FShowTopImage := False;
-  Invalidate;
 end;
 
 procedure TVlcPlayer.SetMediaURL(const Value: string);
@@ -1350,7 +793,7 @@ begin
   if FMediaURL <> Value then
   begin
     FMediaURL := Value;
-    if Value <> '' then
+    if (Value <> '') and not (csLoading in ComponentState) then
       LoadMedia(Value);
   end;
 end;
@@ -1363,75 +806,241 @@ begin
   if FVolume <> Value then
   begin
     FVolume := Value;
-    if (FPlayer <> nil) and Assigned(T_libvlc_audio_set_volume) then
+
+    if Assigned(FPlayer) and Assigned(T_libvlc_audio_set_volume) and not FShutdownMode then
     begin
-      T_libvlc_audio_set_volume(FPlayer, Value);
-      Log('Громкость установлена: ' + IntToStr(Value));
+      try
+        T_libvlc_audio_set_volume(FPlayer, Value);
+      except
+      end;
     end;
+  end;
+end;
+
+procedure TVlcPlayer.SetMuted(const Value: Boolean);
+begin
+  if FMuted <> Value then
+  begin
+    FMuted := Value;
+
+    if Assigned(FPlayer) and Assigned(T_libvlc_audio_set_mute) and not FShutdownMode then
+    begin
+      try
+        T_libvlc_audio_set_mute(FPlayer, Integer(FMuted));
+      except
+      end;
+    end;
+  end;
+end;
+
+procedure TVlcPlayer.SetLoopPlayback(const Value: Boolean);
+begin
+  if FLoopPlayback <> Value then
+  begin
+    FLoopPlayback := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetHighQuality(const Value: Boolean);
+begin
+  if FHighQuality <> Value then
+  begin
+    FHighQuality := Value;
+    Invalidate;
   end;
 end;
 
 procedure TVlcPlayer.SetUserAgent(const Value: string);
 begin
-  if FUserAgent <> Value then
-  begin
-    FUserAgent := Value;
-    Log('User-Agent установлен: ' + Value);
-  end;
+  FUserAgent := Value;
 end;
 
 procedure TVlcPlayer.SetReferer(const Value: string);
 begin
-  if FReferer <> Value then
-  begin
-    FReferer := Value;
-    Log('Referer установлен: ' + Value);
-  end;
+  FReferer := Value;
 end;
 
 procedure TVlcPlayer.SetHttpHeaders(const Value: TStringList);
 begin
-  FHttpHeaders.Assign(Value);
+  if FHttpHeaders <> nil then
+    FHttpHeaders.Assign(Value);
 end;
 
-procedure TVlcPlayer.SetQualityMode(const Value: TVlcQualityMode);
+procedure TVlcPlayer.SetStatusBarVisible(const Value: Boolean);
 begin
-  if FQualityMode <> Value then
+  if FStatusBarVisible <> Value then
   begin
-    FQualityMode := Value;
-    Log('Режим качества изменен');
-
-    if IsPlaying or FIsLoading then
-      ApplyQualitySettings;
-
-    if Assigned(FOnQualityChanged) then
-      FOnQualityChanged(Self);
+    FStatusBarVisible := Value;
+    Invalidate;
   end;
 end;
 
-procedure TVlcPlayer.SetForcedBitrate(const Value: Integer);
+procedure TVlcPlayer.SetStatusBarText(const Value: string);
 begin
-  if FForcedBitrate <> Value then
+  if FStatusBarText <> Value then
   begin
-    FForcedBitrate := Value;
-    if FQualityMode = qmCustom then
-    begin
-      Log('Установлена битрейт: ' + IntToStr(Value) + ' kbps');
-      ApplyQualitySettings;
-    end;
+    FStatusBarText := Value;
+    if FStatusBarVisible then
+      Invalidate;
   end;
 end;
 
-procedure TVlcPlayer.SetForcedResolution(const Value: string);
+procedure TVlcPlayer.SetStatusBarFontSize(const Value: Integer);
 begin
-  if FForcedResolution <> Value then
+  if FStatusBarFontSize <> Value then
   begin
-    FForcedResolution := Value;
-    if FQualityMode = qmCustom then
-    begin
-      Log('Установлено разрешение: ' + Value);
-      ApplyQualitySettings;
-    end;
+    FStatusBarFontSize := Value;
+    if FStatusBarVisible then
+      Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetStatusBarBackground(const Value: TColor);
+begin
+  if FStatusBarBackground <> Value then
+  begin
+    FStatusBarBackground := Value;
+    if FStatusBarVisible then
+      Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetStatusBarTextColor(const Value: TColor);
+begin
+  if FStatusBarTextColor <> Value then
+  begin
+    FStatusBarTextColor := Value;
+    if FStatusBarVisible then
+      Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetStatusBarCornerRadius(const Value: Integer);
+begin
+  if FStatusBarCornerRadius <> Value then
+  begin
+    FStatusBarCornerRadius := Value;
+    if FStatusBarVisible then
+      Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetDisplayText(const Value: string);
+begin
+  if FDisplayText <> Value then
+  begin
+    FDisplayText := Value;
+    if FDisplayTextVisible then
+      Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetDisplayTextVisible(const Value: Boolean);
+begin
+  if FDisplayTextVisible <> Value then
+  begin
+    FDisplayTextVisible := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetDisplayTextFontSize(const Value: Integer);
+begin
+  if FDisplayTextFontSize <> Value then
+  begin
+    FDisplayTextFontSize := Value;
+    if FDisplayTextVisible then
+      Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetDisplayTextColor(const Value: TColor);
+begin
+  if FDisplayTextColor <> Value then
+  begin
+    FDisplayTextColor := Value;
+    if FDisplayTextVisible then
+      Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetDisplayTextBackground(const Value: TColor);
+begin
+  if FDisplayTextBackground <> Value then
+  begin
+    FDisplayTextBackground := Value;
+    if FDisplayTextVisible then
+      Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetDisplayTextBackgroundAlpha(const Value: Integer);
+begin
+  if FDisplayTextBackgroundAlpha <> Value then
+  begin
+    FDisplayTextBackgroundAlpha := Max(0, Min(255, Value));
+    if FDisplayTextVisible then
+      Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetDisplayTextCornerRadius(const Value: Integer);
+begin
+  if FDisplayTextCornerRadius <> Value then
+  begin
+    FDisplayTextCornerRadius := Value;
+    if FDisplayTextVisible then
+      Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetShowTopImage(const Value: Boolean);
+begin
+  if FShowTopImage <> Value then
+  begin
+    FShowTopImage := Value;
+    if FShowTopImage and (FTopImagePath <> '') then
+      LoadTopImage;
+    Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetTopImagePath(const Value: string);
+begin
+  if FTopImagePath <> Value then
+  begin
+    FTopImagePath := Value;
+    if FShowTopImage and (FTopImagePath <> '') then
+      LoadTopImage;
+    Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetTopImageWidth(const Value: Integer);
+begin
+  if FTopImageWidth <> Value then
+  begin
+    FTopImageWidth := Max(8, Value);
+    Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetTopImageHeight(const Value: Integer);
+begin
+  if FTopImageHeight <> Value then
+  begin
+    FTopImageHeight := Max(8, Value);
+    Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetTopImageMargin(const Value: Integer);
+begin
+  if FTopImageMargin <> Value then
+  begin
+    FTopImageMargin := Max(0, Value);
+    Invalidate;
   end;
 end;
 
@@ -1440,603 +1049,817 @@ begin
   Result := FMuted;
 end;
 
-procedure TVlcPlayer.SetMuted(const Value: Boolean);
+function TVlcPlayer.GetPlaying: Boolean;
 begin
-  if FMuted <> Value then
-  begin
-    FMuted := Value;
-    if (FPlayer <> nil) and Assigned(T_libvlc_audio_set_mute) then
-    begin
-      T_libvlc_audio_set_mute(FPlayer, Integer(FMuted));
-      if FMuted then
-        Log('Звук отключен')
-      else
-        Log('Звук включен');
-    end;
-  end;
-end;
-
-function TVlcPlayer.GetCurrentMediaURL: string;
-var
-  Media: Plibvlc_media_t;
-  MRL: PAnsiChar;
-begin
-  Result := FMediaURL; // Возвращаем сохраненный URL по умолчанию
-
-  if not IsInitialized or (FPlayer = nil) then
-    Exit;
-
-  try
-    if Assigned(T_libvlc_media_player_get_media) and
-       Assigned(T_libvlc_media_get_mrl) then
-    begin
-      Media := T_libvlc_media_player_get_media(FPlayer);
-      if Media <> nil then
-      begin
-        MRL := T_libvlc_media_get_mrl(Media);
-        if MRL <> nil then
-        begin
-          Result := UTF8ToString(MRL);
-        end;
-      end;
-    end;
-  except
-    on E: Exception do
-    begin
-      // В случае ошибки возвращаем сохраненный URL
-      Result := FMediaURL;
-    end;
-  end;
-end;
-
-procedure TVlcPlayer.InitVLC;
-var
-  VlcOptions: TStringList;
-  VlcArgs: array of PAnsiChar;
-  I: Integer;
-  LibName: string;
-  OldDir: string;
-begin
-  if FInstance <> nil then Exit;
-
-  if FLibPath = '' then
-    LibName := 'libvlc.dll'
-  else
-    LibName := FLibPath;
-
-  // Сохраняем текущую директорию
-  OldDir := GetCurrentDir;
-  try
-    // Устанавливаем директорию с библиотекой VLC
-    if ExtractFilePath(LibName) <> '' then
-    begin
-     SetDllDirectory(PChar(FLibPath));
-     FLibHandle := LoadLibrary('libvlc.dll');
-     SetDllDirectory(nil);
-    end;
-
-    // Загружаем библиотеку
-    FLibHandle := LoadLibrary(PChar(ExtractFileName(LibName)));
-
-    if FLibHandle = 0 then
-    begin
-      // Пробуем загрузить из системных путей
-      FLibHandle := LoadLibrary('libvlc.dll');
-      if FLibHandle = 0 then
-      begin
-        Log('Ошибка загрузки библиотеки VLC: ' + LibName + '. Ошибка: ' + GetLastErrorText);
-        Exit;
-      end;
-    end;
-
-  finally
-    // Восстанавливаем исходную директорию
-    SetCurrentDir(OldDir);
-  end;
-
-  LoadFunctions;
-
-  // Строим опции VLC
-  VlcOptions := BuildVlcOptions;
-
-  // Подготавливаем аргументы
-  SetLength(VlcArgs, VlcOptions.Count);
-  for I := 0 to VlcOptions.Count - 1 do
-    VlcArgs[I] := PAnsiChar(AnsiString(VlcOptions[I]));
-
-  // Создаем экземпляр VLC
-  FInstance := T_libvlc_new(Length(VlcArgs), @VlcArgs[0]);
-
-  if FInstance = nil then
-  begin
-    Log('Ошибка создания экземпляра VLC');
-    FreeLibrary(FLibHandle);
-    FLibHandle := 0;
-  end
-  else
-  begin
-    Log('VLC инициализирован успешно');
-  end;
-
-  VlcOptions.Free;
-end;
-
-procedure TVlcPlayer.LoadFunctions;
-begin
-  @T_libvlc_new := GetProcAddress(FLibHandle, 'libvlc_new');
-  @T_libvlc_release := GetProcAddress(FLibHandle, 'libvlc_release');
-  @T_libvlc_media_new_path := GetProcAddress(FLibHandle, 'libvlc_media_new_path');
-  @T_libvlc_media_new_location := GetProcAddress(FLibHandle, 'libvlc_media_new_location');
-  @T_libvlc_media_release := GetProcAddress(FLibHandle, 'libvlc_media_release');
-  @T_libvlc_media_player_new_from_media := GetProcAddress(FLibHandle, 'libvlc_media_player_new_from_media');
-  @T_libvlc_media_player_release := GetProcAddress(FLibHandle, 'libvlc_media_player_release');
-  @T_libvlc_media_player_play := GetProcAddress(FLibHandle, 'libvlc_media_player_play');
-  @T_libvlc_media_player_pause := GetProcAddress(FLibHandle, 'libvlc_media_player_pause');
-  @T_libvlc_media_player_stop := GetProcAddress(FLibHandle, 'libvlc_media_player_stop');
-  @T_libvlc_media_player_set_hwnd := GetProcAddress(FLibHandle, 'libvlc_media_player_set_hwnd');
-  @T_libvlc_audio_set_volume := GetProcAddress(FLibHandle, 'libvlc_audio_set_volume');
-  @T_libvlc_media_add_option := GetProcAddress(FLibHandle, 'libvlc_media_add_option');
-  @T_libvlc_media_player_get_length := GetProcAddress(FLibHandle, 'libvlc_media_player_get_length');
-  @T_libvlc_media_player_get_time := GetProcAddress(FLibHandle, 'libvlc_media_player_get_time');
-  @T_libvlc_media_player_get_position := GetProcAddress(FLibHandle, 'libvlc_media_player_get_position');
-  @T_libvlc_event_attach := GetProcAddress(FLibHandle, 'libvlc_event_attach');
-  @T_libvlc_media_player_event_manager := GetProcAddress(FLibHandle, 'libvlc_media_player_event_manager');
-  @T_libvlc_audio_set_mute := GetProcAddress(FLibHandle, 'libvlc_audio_set_mute');
-  @T_libvlc_audio_get_mute := GetProcAddress(FLibHandle, 'libvlc_audio_get_mute');
-  @T_libvlc_media_player_is_playing := GetProcAddress(FLibHandle, 'libvlc_media_player_is_playing');
-
-  // Загружаем новые функции VLC
-  @T_libvlc_media_player_get_buffer := GetProcAddress(FLibHandle, 'libvlc_media_player_get_buffer');
-  @T_libvlc_media_player_get_media := GetProcAddress(FLibHandle, 'libvlc_media_player_get_media');
-  @T_libvlc_media_get_mrl := GetProcAddress(FLibHandle, 'libvlc_media_get_mrl');
-
-  if not Assigned(T_libvlc_new) or not Assigned(T_libvlc_media_new_location) then
-    raise Exception.Create('Не удалось загрузить основные функции VLC');
-end;
-
-procedure TVlcPlayer.FreeVLC;
-begin
-  if FPlayer <> nil then
-  begin
-    T_libvlc_media_player_stop(FPlayer);
-    T_libvlc_media_player_release(FPlayer);
-    FPlayer := nil;
-  end;
-
-  if FMedia <> nil then
-  begin
-    T_libvlc_media_release(FMedia);
-    FMedia := nil;
-  end;
-
-  if FInstance <> nil then
-  begin
-    T_libvlc_release(FInstance);
-    FInstance := nil;
-  end;
-
-  if FLibHandle <> 0 then
-  begin
-    FreeLibrary(FLibHandle);
-    FLibHandle := 0;
-  end;
-
-  FState := vlcIdle;
-  FIsLoading := False;
-  FLoadingProgress := 0;
-  FMuted := False;
-end;
-
-procedure TVlcPlayer.SetState(Value: TVlcState);
-begin
-  if FState <> Value then
-  begin
-    FState := Value;
-    Log('Состояние изменено');
-
-    case Value of
-      vlcPlaying:
-        if Assigned(FOnPlaying) then FOnPlaying(Self);
-      vlcPaused:
-        if Assigned(FOnPaused) then FOnPaused(Self);
-      vlcStopped:
-        if Assigned(FOnStopped) then FOnStopped(Self);
-      vlcError:
-        if Assigned(FOnError) then FOnError(Self);
-    end;
-  end;
-end;
-
-function TVlcPlayer.GetLastErrorText: string;
-var
-  ErrorCode: Integer;
-begin
-  ErrorCode := GetLastError;
-  if ErrorCode <> 0 then
-    Result := SysErrorMessage(ErrorCode)
-  else
-    Result := 'Неизвестная ошибка';
-end;
-
-procedure TVlcPlayer.Log(const Msg: string);
-begin
-  if Assigned(FOnLog) then
-    FOnLog(Self, Msg);
-end;
-
-function TVlcPlayer.BuildVlcOptions: TStringList;
-begin
-  Result := TStringList.Create;
-  try
-    Result.Add(':network-caching=3000');
-    Result.Add(':live-caching=3000');
-
-    if FUserAgent <> '' then
-      Result.Add(':http-user-agent=' + FUserAgent);
-
-    if FReferer <> '' then
-      Result.Add(':http-referrer=' + FReferer);
-
-    for var I := 0 to FHttpHeaders.Count - 1 do
-    begin
-      if FHttpHeaders.Names[I] <> '' then
-        Result.Add(':http-extra-header=' + FHttpHeaders.Names[I] + ': ' + FHttpHeaders.ValueFromIndex[I]);
-    end;
-
-  except
-    Result.Free;
-    raise;
-  end;
-end;
-
-function TVlcPlayer.IsProtectedStream(const AUrl: string): Boolean;
-begin
-  Result := (Pos('wink.', AUrl) > 0) or
-            (Pos('protected.', AUrl) > 0) or
-            (Pos('secure.', AUrl) > 0) or
-            (Pos('premium.', AUrl) > 0);
-end;
-
-function TVlcPlayer.TestStreamProtection(const AUrl: string): Boolean;
-begin
-  Result := IsProtectedStream(AUrl);
-end;
-
-procedure TVlcPlayer.ApplyAppropriateHeaders(const AUrl: string);
-begin
-  if FAutoDetectProtectedStreams and TestStreamProtection(AUrl) then
-  begin
-    Log('Обнаружен защищенный поток, применяем специальные заголовки');
-    SetWinkHeaders;
-  end
-  else if FForceWinkHeaders then
-  begin
-    Log('Принудительно применяем Wink заголовки');
-    SetWinkHeaders;
-  end
-  else
-  begin
-    Log('Применяем стандартные заголовки');
-    SetBasicHeaders;
-  end;
-end;
-
-procedure TVlcPlayer.StopCurrentStream;
-begin
-  FProgressTimer.Enabled := False;
-
-  if FIsLoading then
-  begin
-    Log('Прерывание загрузки текущего потока...');
-  end;
-
-  if FPlayer <> nil then
-  begin
-    T_libvlc_media_player_stop(FPlayer);
-  end;
-
-  FIsLoading := False;
-  FLoadingProgress := 0;
-  SetState(vlcStopped);
-end;
-
-procedure TVlcPlayer.SetupEventHandlers;
-begin
-  if (FPlayer <> nil) and Assigned(T_libvlc_media_player_event_manager) then
-  begin
-    FEventManager := T_libvlc_media_player_event_manager(FPlayer);
-    if FEventManager <> nil then
-    begin
-      T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerPlaying, @VlcEventCallback, Self);
-      T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerPaused, @VlcEventCallback, Self);
-      T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerStopped, @VlcEventCallback, Self);
-      T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerEndReached, @VlcEventCallback, Self);
-      T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerEncounteredError, @VlcEventCallback, Self);
-      T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerBuffering, @VlcEventCallback, Self);
-    end;
-  end;
-end;
-
-procedure TVlcPlayer.ApplyQualitySettings;
-begin
-  if (FPlayer <> nil) and Assigned(T_libvlc_media_add_option) and (FMedia <> nil) then
-  begin
-    var QualityOptions := GetQualityOptions;
-    try
-      for var I := 0 to QualityOptions.Count - 1 do
-      begin
-        T_libvlc_media_add_option(FMedia, PAnsiChar(UTF8Encode(QualityOptions[I])));
-        Log('Добавлена опция качества: ' + QualityOptions[I]);
-      end;
-    finally
-      QualityOptions.Free;
-    end;
-  end;
-end;
-
-function TVlcPlayer.GetQualityOptions: TStringList;
-begin
-  Result := TStringList.Create;
-  try
-    case FQualityMode of
-      qmAuto:
-        begin
-          Result.Add(':network-caching=3000');
-          Result.Add(':live-caching=3000');
-          Log('Режим качества: Автоматический');
-        end;
-
-      qmBest:
-        begin
-          Result.Add(':network-caching=5000');
-          Result.Add(':live-caching=5000');
-          Result.Add(':sout-x264-preset=slow');
-          Result.Add(':sout-x264-tune=film');
-          Result.Add(':crf=18');
-          Result.Add(':prefer-hw-decoder=1');
-          Log('Режим качества: Лучшее (максимальное)');
-        end;
-
-      qmWorst:
-        begin
-          Result.Add(':network-caching=1000');
-          Result.Add(':live-caching=1000');
-          Result.Add(':sout-x264-preset=ultrafast');
-          Result.Add(':crf=28');
-          Result.Add(':drop-late-frames');
-          Result.Add(':skip-frames');
-          Log('Режим качества: Худшее (экономное)');
-        end;
-
-      qmCustom:
-        begin
-          Result.Add(':network-caching=3000');
-          Result.Add(':live-caching=3000');
-
-          if FForcedBitrate > 0 then
-          begin
-            Result.Add(':sout-x264-bitrate=' + IntToStr(FForcedBitrate));
-            Log('Режим качества: Пользовательский (битрейт: ' + IntToStr(FForcedBitrate) + 'kbps)');
-          end;
-
-          if FForcedResolution <> '' then
-          begin
-            Result.Add(':sout-x264-resolution=' + FForcedResolution);
-            Log('Режим качества: Пользовательский (разрешение: ' + FForcedResolution + ')');
-          end;
-        end;
-    end;
-
-    Result.Add(':hls-prefer-native');
-
-    case FQualityMode of
-      qmBest:
-        begin
-          Result.Add(':hls-preferred-resolution=1080');
-          Result.Add(':hls-bitrate=5000000');
-        end;
-      qmWorst:
-        begin
-          Result.Add(':hls-preferred-resolution=360');
-          Result.Add(':hls-bitrate=500000');
-        end;
-      else
-        begin
-          Result.Add(':hls-preferred-resolution=720');
-          Result.Add(':hls-bitrate=2000000');
-        end;
-    end;
-
-  except
-    Result.Free;
-    raise;
-  end;
-end;
-
-procedure TVlcPlayer.SendLoadingEvent(const AEvent: string; AProgress: Integer = -1);
-var
-  EventData: string;
-  CopyDataStruct: TCopyDataStruct;
-begin
-  if FVideoHandle = 0 then Exit;
-
-  if AProgress >= 0 then
-    EventData := AEvent + '|' + IntToStr(AProgress) + '|' + IntToStr(GetTickCount)
-  else
-    EventData := AEvent + '||' + IntToStr(GetTickCount);
-
-  CopyDataStruct.dwData := 0;
-  CopyDataStruct.cbData := (Length(EventData) + 1) * SizeOf(Char);
-  CopyDataStruct.lpData := PChar(EventData);
-
-  SendMessage(FVideoHandle, WM_COPYDATA, WPARAM(Self.Handle), LPARAM(@CopyDataStruct));
-end;
-
-procedure TVlcPlayer.SendStateEvent(const AState: string);
-begin
-  SendLoadingEvent('STATE_' + AState);
-end;
-
-function TVlcPlayer.GetBufferingLevel: Integer;
-var
-  BufferLevel: Single;
-begin
-  Result := -1;
-
-  if not IsInitialized then
-    Exit;
-
-  if Assigned(T_libvlc_media_player_get_buffer) and (FPlayer <> nil) then
+  if Assigned(FPlayer) and Assigned(T_libvlc_media_player_is_playing) then
   begin
     try
-      BufferLevel := T_libvlc_media_player_get_buffer(FPlayer);
-      if BufferLevel >= 0 then
-        Result := Round(BufferLevel * 100)
-      else
-        Result := -1;
+      Result := T_libvlc_media_player_is_playing(FPlayer) <> 0;
     except
-      Result := -1;
+      Result := False;
     end;
-  end;
+  end
+  else
+    Result := FState = vlcPlaying;
 end;
 
-function TVlcPlayer.IsNetworkStream: Boolean;
-var
-  Media: Plibvlc_media_t;
-  MRL: PAnsiChar;
-  MRLString: string;
+function TVlcPlayer.GetPaused: Boolean;
 begin
-  Result := False;
+  Result := FState = vlcPaused;
+end;
 
-  if (FPlayer <> nil) and
-     Assigned(T_libvlc_media_player_get_media) and
-     Assigned(T_libvlc_media_get_mrl) then
+function TVlcPlayer.GetStopped: Boolean;
+begin
+  Result := FState = vlcStopped;
+end;
+
+function TVlcPlayer.GetPosition: Int64;
+begin
+  Result := 0;
+  if Assigned(FPlayer) and Assigned(T_libvlc_media_player_get_time) then
   begin
-    Media := T_libvlc_media_player_get_media(FPlayer);
-    if Media <> nil then
-    begin
-      MRL := T_libvlc_media_get_mrl(Media);
-      if MRL <> nil then
-      begin
-        MRLString := LowerCase(string(MRL));
-        Result := (Pos('http', MRLString) > 0) or
-                  (Pos('rtsp', MRLString) > 0) or
-                  (Pos('rtmp', MRLString) > 0) or
-                  (Pos('udp', MRLString) > 0) or
-                  (Pos('mms', MRLString) > 0) or
-                  (Pos('rtp', MRLString) > 0);
-      end;
+    try
+      Result := T_libvlc_media_player_get_time(FPlayer);
+    except
+      Result := 0;
     end;
   end;
 end;
 
-function TVlcPlayer.GetActualLoadingProgress: Integer;
-var
-  BufferLevel: Single;
+function TVlcPlayer.GetPlaybackPosition: Single;
 begin
-  Result := -1;
+  Result := 0;
+  if Assigned(FPlayer) and Assigned(T_libvlc_media_player_get_position) then
+  begin
+    try
+      Result := T_libvlc_media_player_get_position(FPlayer);
+    except
+      Result := 0;
+    end;
+  end;
+end;
 
-  if not IsInitialized or (FPlayer = nil) then
-    Exit;
+// Новый метод для получения текущего URL медиа
+function TVlcPlayer.GetCurrentMediaURL: string;
+begin
+  Result := FMediaURL;
+end;
+
+procedure TVlcPlayer.CreateWnd;
+begin
+  inherited CreateWnd;
+  if not (csDesigning in ComponentState) then
+  begin
+    FOriginalWndProc := WindowProc;
+    WindowProc := MainWndProc;
+  end;
+end;
+
+procedure TVlcPlayer.DestroyWnd;
+begin
+  if not (csDesigning in ComponentState) then
+  begin
+    if Assigned(FOriginalWndProc) then
+      WindowProc := FOriginalWndProc;
+  end;
+  inherited DestroyWnd;
+end;
+
+procedure TVlcPlayer.Paint;
+var
+  VideoRect: TRect;
+begin
+  inherited Paint;
+
+  Canvas.Brush.Color := clBlack;
+  Canvas.FillRect(ClientRect);
+
+  if FBufferValid and Assigned(FVideoBitmap) and
+     (FVideoBitmap.Width > 1) and (FVideoBitmap.Height > 1) then
+  begin
+    try
+      VideoRect := CalculateAspectRatioFit;
+      Canvas.StretchDraw(VideoRect, FVideoBitmap);
+    except
+      Canvas.Brush.Color := clBlack;
+      Canvas.FillRect(ClientRect);
+    end;
+  end
+  else
+  begin
+    Canvas.Brush.Color := clGray;
+    Canvas.FillRect(ClientRect);
+
+    if csDesigning in ComponentState then
+    begin
+      Canvas.Font.Color := clWhite;
+      Canvas.TextOut(10, 10, 'TVlcPlayer');
+      Canvas.TextOut(10, 30, 'No video loaded');
+    end;
+  end;
+
+  if FDisplayTextVisible then
+    DrawDisplayText(Canvas);
+
+  if FShowTopImage then
+    DrawTopImage(Canvas);
+
+  if FStatusBarVisible and (FStatusBarText <> '') then
+    DrawStatusBar(Canvas);
+
+  if FShowLoading then
+    DrawLoadingAnimation(Canvas);
+
+  if FCurrentFPS > 0 then
+  begin
+    Canvas.Font.Color := clWhite;
+    Canvas.Font.Size := 8;
+    Canvas.TextOut(5, Height - 20, Format('FPS: %d', [FCurrentFPS]));
+  end;
+end;
+
+procedure TVlcPlayer.Resize;
+begin
+  inherited Resize;
+  Invalidate;
+end;
+
+procedure TVlcPlayer.DrawStatusBar(Canvas: TCanvas);
+var
+  TextWidth, TextHeight: Integer;
+  StatusRect: TRect;
+  OldMode: Integer;
+begin
+  if not FStatusBarVisible or (FStatusBarText = '') then Exit;
+
+  Canvas.Font.Color := FStatusBarTextColor;
+  Canvas.Font.Size := FStatusBarFontSize;
+  Canvas.Font.Style := [fsBold];
+
+  TextWidth := Canvas.TextWidth(FStatusBarText);
+  TextHeight := Canvas.TextHeight(FStatusBarText);
+
+  StatusRect := Rect(10, 10, 10 + TextWidth + 20, 10 + TextHeight + 10);
+
+  OldMode := SetBkMode(Canvas.Handle, TRANSPARENT);
 
   try
-    if Assigned(T_libvlc_media_player_get_buffer) then
-    begin
-      BufferLevel := T_libvlc_media_player_get_buffer(FPlayer);
+    Canvas.Brush.Color := FStatusBarBackground;
+    Canvas.Pen.Color := FStatusBarBackground;
+    Canvas.RoundRect(StatusRect.Left, StatusRect.Top, StatusRect.Right, StatusRect.Bottom,
+      FStatusBarCornerRadius, FStatusBarCornerRadius);
 
-      // VLC возвращает значение от 0.0 до 1.0
-      if (BufferLevel >= 0) and (BufferLevel <= 1.0) then
+    Canvas.Font.Color := FStatusBarTextColor;
+    Canvas.TextOut(StatusRect.Left + 10, StatusRect.Top + 5, FStatusBarText);
+  finally
+    SetBkMode(Canvas.Handle, OldMode);
+  end;
+end;
+
+procedure TVlcPlayer.DrawDisplayText(Canvas: TCanvas);
+var
+  TextWidth, TextHeight: Integer;
+  TextRect: TRect;
+  OldMode: Integer;
+begin
+  if not FDisplayTextVisible or (FDisplayText = '') then Exit;
+
+  Canvas.Font.Color := FDisplayTextColor;
+  Canvas.Font.Size := FDisplayTextFontSize;
+  Canvas.Font.Style := [fsBold];
+  Canvas.Font.Name := 'Segoe UI';
+
+  TextWidth := Canvas.TextWidth(FDisplayText);
+  TextHeight := Canvas.TextHeight(FDisplayText);
+
+  TextRect.Left := (ClientWidth - TextWidth) div 2;
+  TextRect.Top := ClientHeight - TextHeight - 20;
+  TextRect.Right := TextRect.Left + TextWidth + 20;
+  TextRect.Bottom := TextRect.Top + TextHeight + 10;
+
+  if FDisplayTextBackgroundAlpha > 0 then
+  begin
+    Canvas.Brush.Color := FDisplayTextBackground;
+
+    if FDisplayTextCornerRadius > 0 then
+    begin
+      Canvas.Pen.Color := FDisplayTextBackground;
+      Canvas.Pen.Width := 1;
+      Canvas.RoundRect(TextRect.Left, TextRect.Top, TextRect.Right, TextRect.Bottom,
+        FDisplayTextCornerRadius, FDisplayTextCornerRadius);
+    end
+    else
+    begin
+      Canvas.FillRect(TextRect);
+    end;
+  end;
+
+  OldMode := SetBkMode(Canvas.Handle, TRANSPARENT);
+  try
+    Canvas.Font.Color := FDisplayTextColor;
+    Canvas.TextOut(TextRect.Left + 10, TextRect.Top + 5, FDisplayText);
+  finally
+    SetBkMode(Canvas.Handle, OldMode);
+  end;
+end;
+
+procedure TVlcPlayer.DrawTopImage(Canvas: TCanvas);
+var
+  DestRect: TRect;
+begin
+  if not FShowTopImage or (FTopImage = nil) or (FTopImage.Width = 0) or (FTopImage.Height = 0) then Exit;
+
+  try
+    DestRect.Right := ClientWidth - FTopImageMargin;
+    DestRect.Top := FTopImageMargin;
+    DestRect.Left := DestRect.Right - FTopImageWidth;
+    DestRect.Bottom := DestRect.Top + FTopImageHeight;
+
+    Canvas.StretchDraw(DestRect, FTopImage);
+
+  except
+  end;
+end;
+
+procedure TVlcPlayer.DrawLoadingAnimation(Canvas: TCanvas);
+var
+  CenterX, CenterY, Radius: Integer;
+  I, TotalDots, ActiveDots: Integer;
+  Angle: Double;
+  X, Y: Integer;
+  CurrentTime: Cardinal;
+  AnimationPhase: Integer;
+  OldBrushColor, OldPenColor: TColor;
+  RunningIndex: Integer;
+  RunningAngle: Double;
+  RunningX, RunningY: Integer;
+  Pulse: Double;
+  RunningSize: Integer;
+begin
+  if not FShowLoading then Exit;
+
+  CenterX := Width div 2;
+  CenterY := Height div 2;
+
+  Radius := Min(Width, Height) div 24;
+  Radius := Max(8, Min(23, Radius));
+
+  TotalDots := 12;
+
+  CurrentTime := GetTickCount;
+  AnimationPhase := (CurrentTime div 100) mod (TotalDots + 1);
+  ActiveDots := AnimationPhase;
+
+  OldBrushColor := Canvas.Brush.Color;
+  OldPenColor := Canvas.Pen.Color;
+
+  try
+    for I := 0 to TotalDots - 1 do
+    begin
+      Angle := 2 * Pi * I / TotalDots;
+      X := CenterX + Round(Cos(Angle) * Radius);
+      Y := CenterY + Round(Sin(Angle) * Radius);
+
+      if I < ActiveDots then
       begin
-        Result := Round(BufferLevel * 100);
-        Log('Уровень буферизации: ' + IntToStr(Result) + '%');
+        Canvas.Brush.Color := clWhite;
+        Canvas.Pen.Color := clGray;
+        Canvas.Ellipse(X - 2, Y - 2, X + 2, Y + 2);
       end
       else
       begin
-        Log('Буферизация недоступна: ' + FloatToStr(BufferLevel));
+        Canvas.Brush.Color := $50666666;
+        Canvas.Pen.Color := $50666666;
+        Canvas.Ellipse(X - 1, Y - 1, X + 1, Y + 1);
       end;
+    end;
+
+    if ActiveDots > 0 then
+    begin
+      RunningIndex := ActiveDots - 1;
+      RunningAngle := 2 * Pi * RunningIndex / TotalDots;
+      RunningX := CenterX + Round(Cos(RunningAngle) * Radius);
+      RunningY := CenterY + Round(Sin(RunningAngle) * Radius);
+
+      Pulse := (Sin(DegToRad(CurrentTime / 20)) + 1) / 2;
+      RunningSize := 2 + Round(1 * Pulse);
+
+      Canvas.Brush.Color := clWhite;
+      Canvas.Pen.Color := clGray;
+      Canvas.Ellipse(RunningX - RunningSize, RunningY - RunningSize,
+                     RunningX + RunningSize, RunningY + RunningSize);
+    end;
+
+  finally
+    Canvas.Brush.Color := OldBrushColor;
+    Canvas.Pen.Color := OldPenColor;
+  end;
+end;
+
+function TVlcPlayer.CalculateAspectRatioFit: TRect;
+var
+  AspectRatio: Double;
+  ScaledWidth, ScaledHeight: Integer;
+  X, Y: Integer;
+begin
+  if (FVideoBitmap = nil) or (FVideoBitmap.Width = 0) or (FVideoBitmap.Height = 0) then
+  begin
+    Result := ClientRect;
+    Exit;
+  end;
+
+  AspectRatio := FVideoBitmap.Width / FVideoBitmap.Height;
+  ScaledHeight := ClientHeight;
+  ScaledWidth := Round(ScaledHeight * AspectRatio);
+
+  if ScaledWidth > ClientWidth then
+  begin
+    ScaledWidth := ClientWidth;
+    ScaledHeight := Round(ScaledWidth / AspectRatio);
+  end;
+
+  X := (ClientWidth - ScaledWidth) div 2;
+  Y := (ClientHeight - ScaledHeight) div 2;
+
+  Result := Rect(X, Y, X + ScaledWidth, Y + ScaledHeight);
+end;
+
+procedure TVlcPlayer.LoadTopImage;
+begin
+  if (FTopImagePath <> '') and FileExists(FTopImagePath) then
+  begin
+    try
+      FTopImage.LoadFromFile(FTopImagePath);
+    except
+      FTopImage.Free;
+      FTopImage := TPNGImage.Create;
+    end;
+  end
+  else
+  begin
+    FTopImage.Free;
+    FTopImage := TPNGImage.Create;
+  end;
+end;
+
+procedure TVlcPlayer.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+begin
+  inherited;
+
+  if Assigned(FOnVideoMouseDown) then
+    FOnVideoMouseDown(Self, Button, Shift, X, Y);
+end;
+
+procedure TVlcPlayer.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+begin
+  inherited;
+
+  if Assigned(FOnVideoMouseUp) then
+    FOnVideoMouseUp(Self, Button, Shift, X, Y);
+
+  if Assigned(FOnVideoClick) and (Button = mbLeft) then
+    FOnVideoClick(Self);
+end;
+
+procedure TVlcPlayer.MouseMove(Shift: TShiftState; X, Y: Integer);
+begin
+  inherited;
+
+  FLastMouseMoveTime := GetTickCount;
+
+  if Assigned(FOnVideoMouseMove) then
+    FOnVideoMouseMove(Self, Shift, X, Y);
+end;
+
+procedure TVlcPlayer.DblClick;
+begin
+  inherited;
+
+  if Assigned(FOnVideoDblClick) then
+    FOnVideoDblClick(Self);
+end;
+
+procedure TVlcPlayer.MouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint);
+var
+  ActualMousePos: TPoint;
+begin
+  inherited;
+
+  // Преобразуем координаты, если MousePos указан относительно экрана
+  ActualMousePos := ScreenToClient(MousePos);
+
+  if Assigned(FOnVideoMouseWheel) then
+    FOnVideoMouseWheel(Self, Shift, WheelDelta, ActualMousePos);
+end;
+
+procedure TVlcPlayer.MainWndProc(var Message: TMessage);
+var
+  Shift: TShiftState;
+  MousePos: TPoint;
+  Handled: Boolean;
+  Button: TMouseButton;
+begin
+  Handled := False;
+
+  case Message.Msg of
+    WM_LBUTTONDOWN, WM_RBUTTONDOWN, WM_MBUTTONDOWN:
+      begin
+        if Assigned(FOnVideoMouseDown) then
+        begin
+          MousePos.X := SmallInt(Message.LParamLo);
+          MousePos.Y := SmallInt(Message.LParamHi);
+          Shift := GetShiftState;
+
+          case Message.Msg of
+            WM_LBUTTONDOWN: Button := mbLeft;
+            WM_RBUTTONDOWN: Button := mbRight;
+            WM_MBUTTONDOWN: Button := mbMiddle;
+          else
+            Button := mbLeft;
+          end;
+
+          FOnVideoMouseDown(Self, Button, Shift, MousePos.X, MousePos.Y);
+          Handled := True;
+        end;
+      end;
+
+    WM_LBUTTONUP, WM_RBUTTONUP, WM_MBUTTONUP:
+      begin
+        if Assigned(FOnVideoMouseUp) then
+        begin
+          MousePos.X := SmallInt(Message.LParamLo);
+          MousePos.Y := SmallInt(Message.LParamHi);
+          Shift := GetShiftState;
+
+          case Message.Msg of
+            WM_LBUTTONUP: Button := mbLeft;
+            WM_RBUTTONUP: Button := mbRight;
+            WM_MBUTTONUP: Button := mbMiddle;
+          else
+            Button := mbLeft;
+          end;
+
+          FOnVideoMouseUp(Self, Button, Shift, MousePos.X, MousePos.Y);
+          Handled := True;
+        end;
+      end;
+
+    WM_MOUSEMOVE:
+      begin
+        if Assigned(FOnVideoMouseMove) then
+        begin
+          MousePos.X := SmallInt(Message.LParamLo);
+          MousePos.Y := SmallInt(Message.LParamHi);
+          Shift := GetShiftState;
+          FOnVideoMouseMove(Self, Shift, MousePos.X, MousePos.Y);
+          Handled := True;
+        end;
+      end;
+
+    WM_MOUSEWHEEL:
+      begin
+        if Assigned(FOnVideoMouseWheel) then
+        begin
+          var WheelDelta := SmallInt(Message.WParamHi);
+          MousePos.X := SmallInt(Message.LParamLo);
+          MousePos.Y := SmallInt(Message.LParamHi);
+          Shift := GetShiftState;
+          FOnVideoMouseWheel(Self, Shift, WheelDelta, MousePos);
+          Handled := True;
+        end;
+      end;
+  end;
+
+  if not Handled then
+  begin
+    if Assigned(FOriginalWndProc) then
+      FOriginalWndProc(Message)
+    else
+      inherited;
+  end;
+end;
+
+function TVlcPlayer.GetShiftState: TShiftState;
+begin
+  Result := [];
+
+  if GetKeyState(VK_SHIFT) < 0 then
+    Include(Result, ssShift);
+  if GetKeyState(VK_CONTROL) < 0 then
+    Include(Result, ssCtrl);
+  if GetKeyState(VK_MENU) < 0 then
+    Include(Result, ssAlt);
+  if GetKeyState(VK_LBUTTON) < 0 then
+    Include(Result, ssLeft);
+  if GetKeyState(VK_RBUTTON) < 0 then
+    Include(Result, ssRight);
+  if GetKeyState(VK_MBUTTON) < 0 then
+    Include(Result, ssMiddle);
+end;
+
+procedure TVlcPlayer.ForceRepaint;
+begin
+  if HandleAllocated then
+  begin
+    InvalidateRect(Handle, nil, False);
+    UpdateWindow(Handle);
+  end;
+end;
+
+procedure TVlcPlayer.SafeInvalidate;
+begin
+  if TThread.Current.ThreadID = MainThreadID then
+  begin
+    if not (csDestroying in ComponentState) and HandleAllocated then
+      Invalidate;
+  end
+  else
+  begin
+    PostMessage(Handle, WM_USER + 1, 0, 0);
+  end;
+end;
+
+function TVlcPlayer.IsNetworkStream(const AUrl: string): Boolean;
+var
+  LowerUrl: string;
+begin
+  LowerUrl := LowerCase(AUrl);
+  Result := (Pos('http://', LowerUrl) = 1) or
+            (Pos('https://', LowerUrl) = 1) or
+            (Pos('rtsp://', LowerUrl) = 1) or
+            (Pos('udp://', LowerUrl) = 1) or
+            (Pos('rtmp://', LowerUrl) = 1) or
+            (Pos('mms://', LowerUrl) = 1);
+end;
+
+procedure TVlcPlayer.EnableAudio;
+begin
+  if FAudioEnabled or FShutdownMode then Exit;
+
+  if (FPlayer <> nil) and Assigned(T_libvlc_audio_set_volume) then
+  begin
+    try
+      T_libvlc_audio_set_volume(FPlayer, FVolume);
+    except
+    end;
+  end;
+
+  if (FPlayer <> nil) and Assigned(T_libvlc_audio_set_mute) then
+  begin
+    try
+      T_libvlc_audio_set_mute(FPlayer, Integer(FMuted));
+    except
+    end;
+  end;
+
+  FAudioEnabled := True;
+end;
+
+procedure TVlcPlayer.ForceVideoUpdate;
+begin
+  if FFrameReady and FBufferValid then
+  begin
+    try
+      UpdateBitmapFromBuffer;
+      FFrameReady := False;
+      Invalidate;
+    except
+    end;
+  end;
+end;
+
+procedure TVlcPlayer.Play;
+var
+  ResultCode: Integer;
+begin
+  if not IsInitialized then
+    Exit;
+
+  if FPlayer = nil then
+    Exit;
+
+  StartStreamHealthMonitor;
+
+  if FFrameTimer <> nil then
+    FFrameTimer.Enabled := True;
+
+  ResultCode := T_libvlc_media_player_play(FPlayer);
+
+  if ResultCode <> 0 then
+  begin
+    SetState(vlcError);
+    FIsLoading := False;
+
+    if Assigned(FOnError) then
+      FOnError(Self, ResultCode, 'Playback failed');
+  end;
+end;
+
+procedure TVlcPlayer.Pause;
+begin
+  if FShutdownMode or (FPlayer = nil) then Exit;
+
+  if (FPlayer <> nil) and Assigned(T_libvlc_media_player_pause) then
+  begin
+    if IsPlaying then
+      T_libvlc_media_player_pause(FPlayer);
+  end;
+end;
+
+procedure TVlcPlayer.Stop;
+begin
+  if FShutdownMode then Exit;
+  if (csDestroying in ComponentState) then Exit;
+
+  if FHealthTimer <> nil then
+    FHealthTimer.Enabled := False;
+
+  if (FPlayer <> nil) and Assigned(T_libvlc_media_player_stop) then
+  begin
+    try
+      T_libvlc_media_player_stop(FPlayer);
+    except
+    end;
+  end;
+
+  if FFrameTimer <> nil then
+    FFrameTimer.Enabled := False;
+
+  if FSyncTimer <> nil then
+    FSyncTimer.Enabled := False;
+
+  SetState(vlcStopped);
+  FIsLoading := False;
+
+  ClearVideoBuffer;
+end;
+
+procedure TVlcPlayer.LoadMedia(const AUrl: string);
+var
+  Options: TStringList;
+  I: Integer;
+begin
+  if (csDestroying in ComponentState) then
+    Exit;
+
+  ResetStreamState;
+
+  if IsPlaying or IsPaused then
+    Stop;
+
+  Sleep(100);
+
+  FAudioEnabled := False;
+  FVideoStarted := False;
+  FBufferValid := False;
+  FFrameReady := False;
+
+  SetState(vlcLoading);
+  FIsLoading := True;
+
+  FShowLoading := True;
+
+  if FFallbackTimer <> nil then
+    FFallbackTimer.Enabled := True;
+
+  if not IsInitialized then
+    InitVLC;
+
+  if not IsInitialized then
+  begin
+    SetState(vlcError);
+    if Assigned(FOnError) then
+      FOnError(Self, -100, 'VLC not initialized');
+    Exit;
+  end;
+
+  if AUrl = '' then
+  begin
+    SetState(vlcError);
+    if Assigned(FOnError) then
+      FOnError(Self, -101, 'Empty media URL');
+    Exit;
+  end;
+
+  if Assigned(FOnLoading) then
+    FOnLoading(Self);
+
+  try
+    if FPlayer <> nil then
+    begin
+      try
+        if Assigned(T_libvlc_media_player_stop) then
+          T_libvlc_media_player_stop(FPlayer);
+        Sleep(100);
+
+        if Assigned(T_libvlc_media_player_release) then
+          T_libvlc_media_player_release(FPlayer);
+      except
+      end;
+      FPlayer := nil;
+    end;
+
+    if FMedia <> nil then
+    begin
+      try
+        if Assigned(T_libvlc_media_release) then
+          T_libvlc_media_release(FMedia);
+      except
+      end;
+      FMedia := nil;
+    end;
+
+    Sleep(100);
+
+    if IsNetworkStream(AUrl) then
+      FMedia := T_libvlc_media_new_location(FInstance, PAnsiChar(AnsiString(AUrl)))
+    else
+      FMedia := T_libvlc_media_new_path(FInstance, PAnsiChar(AnsiString(AUrl)));
+
+    if FMedia = nil then
+      raise Exception.Create('Failed to create media object');
+
+    if Assigned(T_libvlc_media_add_option) then
+    begin
+      Options := BuildVlcOptions;
+      try
+        for I := 0 to Options.Count - 1 do
+          T_libvlc_media_add_option(FMedia, PAnsiChar(AnsiString(Options[I])));
+      finally
+        Options.Free;
+      end;
+    end;
+
+    Sleep(100);
+
+    FPlayer := T_libvlc_media_player_new_from_media(FMedia);
+    if FPlayer = nil then
+      raise Exception.Create('Failed to create media player');
+
+    Sleep(50);
+
+    SetupEventHandlers;
+
+    Sleep(50);
+
+    SetupMemoryRendering;
+
+    if FFrameTimer <> nil then
+      FFrameTimer.Enabled := True;
+
+    StartStreamHealthMonitor;
+
+    if (FPlayer <> nil) and Assigned(T_libvlc_audio_set_mute) then
+    begin
+      try
+        T_libvlc_audio_set_mute(FPlayer, Integer(FMuted));
+      except
+      end;
+    end;
+
+    if FAutoPlay then
+    begin
+      Sleep(200);
+      Play;
     end
     else
     begin
-      Log('Функция libvlc_media_player_get_buffer не доступна');
+      SetState(vlcPaused);
     end;
 
   except
     on E: Exception do
     begin
-      Log('Ошибка получения буферизации: ' + E.Message);
-      Result := -1;
-    end;
-  end;
-end;
-
-procedure TVlcPlayer.UpdateRealLoadingProgress;
-var
-  ActualProgress: Integer;
-  CurrentTime: Cardinal;
-begin
-  if not FIsLoading then Exit;
-
-  ActualProgress := GetActualLoadingProgress;
-
-  if ActualProgress >= 0 then
-  begin
-    if (ActualProgress > FLoadingProgress) or
-       ((GetTickCount - FLastProgressUpdate) > 1000) then
-    begin
-      FLoadingProgress := ActualProgress;
-      FLastProgressUpdate := GetTickCount;
-
-      if (FLoadingProgress mod 25 = 0) or (FLoadingProgress = 100) then
-        Log('Прогресс загрузки: ' + IntToStr(FLoadingProgress) + '%');
-
-      if Assigned(FOnLoadingProgress) then
-        FOnLoadingProgress(Self, FLoadingProgress);
-
-      SendLoadingEvent('LOADING_PROGRESS', FLoadingProgress);
-    end;
-  end
-  else
-  begin
-    CurrentTime := GetTickCount;
-    if (CurrentTime - FLoadStartTime) < 30000 then
-    begin
-      if (CurrentTime - FLastProgressUpdate) > 2000 then
-      begin
-        if FLoadingProgress < 80 then
-          FLoadingProgress := FLoadingProgress + 10
-        else if FLoadingProgress < 95 then
-          FLoadingProgress := FLoadingProgress + 5;
-
-        FLastProgressUpdate := CurrentTime;
-
-        if Assigned(FOnLoadingProgress) then
-          FOnLoadingProgress(Self, FLoadingProgress);
-
-        SendLoadingEvent('LOADING_PROGRESS', FLoadingProgress);
-      end;
-    end
-    else
-    begin
-      FIsLoading := False;
       SetState(vlcError);
-      SendLoadingEvent('LOADING_ERROR');
-      Log('Таймаут загрузки - превышено время ожидания');
-    end;
-  end;
+      FIsLoading := False;
+      FAudioEnabled := False;
+      FVideoStarted := False;
 
-  if (FLoadingProgress >= 95) and (FState = vlcPlaying) then
-  begin
-    FIsLoading := False;
-    FLoadingProgress := 100;
-    SendLoadingEvent('LOADING_COMPLETE');
-    Log('Загрузка завершена');
+      FShowLoading := False;
+      Invalidate;
+
+      if Assigned(FOnError) then
+        FOnError(Self, -1, E.Message);
+    end;
   end;
 end;
 
-procedure TVlcPlayer.ProgressTimerTick(Sender: TObject);
+procedure TVlcPlayer.SeekTo(Position: Single);
 begin
-  if FIsLoading then
-    UpdateRealLoadingProgress;
+  if (FPlayer <> nil) and Assigned(T_libvlc_media_player_set_position) then
+  begin
+    Position := Max(0, Min(1, Position));
+    T_libvlc_media_player_set_position(FPlayer, Position);
+  end;
+end;
+
+procedure TVlcPlayer.SeekToTime(TimeMs: Int64);
+begin
+  if (FPlayer <> nil) and Assigned(T_libvlc_media_player_set_time) then
+  begin
+    TimeMs := Max(0, TimeMs);
+    T_libvlc_media_player_set_time(FPlayer, TimeMs);
+  end;
 end;
 
 function TVlcPlayer.IsInitialized: Boolean;
@@ -2044,35 +1867,17 @@ begin
   Result := (FInstance <> nil) and (FLibHandle <> 0);
 end;
 
-function TVlcPlayer.IsPlaying: Boolean;
+function TVlcPlayer.IsSeekable: Boolean;
 begin
-  if (FPlayer <> nil) and Assigned(T_libvlc_media_player_is_playing) then
-    Result := (T_libvlc_media_player_is_playing(FPlayer) <> 0)
-  else
-    Result := FState = vlcPlaying;
+  Result := (FPlayer <> nil) and (GetDuration > 0);
 end;
 
-function TVlcPlayer.IsActuallyPlaying: Boolean;
-var
-  Position: Single;
-  Duration: Int64;
+function TVlcPlayer.CanPause: Boolean;
 begin
-  Result := False;
-
-  if not IsInitialized or (FPlayer = nil) then
-    Exit;
-
-  if Assigned(T_libvlc_media_player_is_playing) then
-    if T_libvlc_media_player_is_playing(FPlayer) = 0 then
-      Exit;
-
-  if FState <> vlcPlaying then
-    Exit;
-
-  Position := GetPlaybackPosition;
-  Duration := GetDuration;
-
-  Result := (Duration > 0) and (Position >= 0) and (not FIsLoading);
+  if (FPlayer <> nil) and Assigned(T_libvlc_media_player_is_playing) then
+    Result := IsPlaying
+  else
+    Result := True;
 end;
 
 function TVlcPlayer.GetDuration: Int64;
@@ -2083,66 +1888,47 @@ begin
     Result := 0;
 end;
 
-function TVlcPlayer.GetPosition: Int64;
+function TVlcPlayer.GetVideoWidth: Integer;
 begin
-  if (FPlayer <> nil) and Assigned(T_libvlc_media_player_get_time) then
-    Result := T_libvlc_media_player_get_time(FPlayer)
-  else
-    Result := 0;
+  Result := FVideoWidth;
 end;
 
-function TVlcPlayer.GetPlaybackPosition: Single;
+function TVlcPlayer.GetVideoHeight: Integer;
 begin
-  if (FPlayer <> nil) and Assigned(T_libvlc_media_player_get_position) then
-    Result := T_libvlc_media_player_get_position(FPlayer)
-  else
-    Result := 0;
+  Result := FVideoHeight;
+end;
+
+function TVlcPlayer.HasVideo: Boolean;
+begin
+  Result := (FVideoWidth > 0) and (FVideoHeight > 0) and
+            (FVideoBitmap <> nil) and not FVideoBitmap.Empty;
 end;
 
 function TVlcPlayer.GetPlayerStatus: string;
 begin
   case FState of
-    vlcIdle: Result := 'Ожидание';
-    vlcLoading: Result := 'Загрузка';
-    vlcPlaying: Result := 'Воспроизведение';
-    vlcPaused: Result := 'Пауза';
-    vlcStopped: Result := 'Остановлен';
-    vlcError: Result := 'Ошибка';
+    vlcIdle: Result := 'Idle';
+    vlcLoading: Result := 'Loading';
+    vlcPlaying: Result := 'Playing';
+    vlcPaused: Result := 'Paused';
+    vlcStopped: Result := 'Stopped';
+    vlcError: Result := 'Error';
+    vlcBuffering: Result := 'Buffering';
   else
-    Result := 'Неизвестно';
+    Result := 'Unknown';
   end;
-end;
-
-procedure TVlcPlayer.ForceBestQuality;
-begin
-  QualityMode := qmBest;
-end;
-
-procedure TVlcPlayer.ForceWorstQuality;
-begin
-  QualityMode := qmWorst;
-end;
-
-procedure TVlcPlayer.ForceAutoQuality;
-begin
-  QualityMode := qmAuto;
-end;
-
-procedure TVlcPlayer.ForceCustomQuality(Bitrate: Integer; const Resolution: string);
-begin
-  FForcedBitrate := Bitrate;
-  FForcedResolution := Resolution;
-  QualityMode := qmCustom;
 end;
 
 procedure TVlcPlayer.AddHttpHeader(const AName, AValue: string);
 begin
-  FHttpHeaders.Values[AName] := AValue;
+  if FHttpHeaders <> nil then
+    FHttpHeaders.Values[AName] := AValue;
 end;
 
 procedure TVlcPlayer.ClearHttpHeaders;
 begin
-  FHttpHeaders.Clear;
+  if FHttpHeaders <> nil then
+    FHttpHeaders.Clear;
 end;
 
 procedure TVlcPlayer.SetWinkHeaders;
@@ -2152,11 +1938,7 @@ begin
   ClearHttpHeaders;
   AddHttpHeader('Accept', '*/*');
   AddHttpHeader('Accept-Language', 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7');
-  AddHttpHeader('Accept-Encoding', 'gzip, deflate, br');
   AddHttpHeader('Origin', 'https://wink.ru');
-  AddHttpHeader('Sec-Fetch-Dest', 'empty');
-  AddHttpHeader('Sec-Fetch-Mode', 'cors');
-  AddHttpHeader('Sec-Fetch-Site', 'cross-site');
 end;
 
 procedure TVlcPlayer.SetBasicHeaders;
@@ -2166,279 +1948,1311 @@ begin
   ClearHttpHeaders;
   AddHttpHeader('Accept', '*/*');
   AddHttpHeader('Accept-Language', 'en-US,en;q=0.9');
-  AddHttpHeader('Accept-Encoding', 'gzip, deflate, br');
 end;
 
 procedure TVlcPlayer.Mute;
 begin
-  if not FMuted then
-  begin
-    FMuted := True;
-    if (FPlayer <> nil) and Assigned(T_libvlc_audio_set_mute) then
-    begin
-      T_libvlc_audio_set_mute(FPlayer, 1);
-      Log('Звук отключен');
-    end;
-  end;
+  SetMuted(True);
 end;
 
 procedure TVlcPlayer.Unmute;
 begin
-  if FMuted then
-  begin
-    FMuted := False;
-    if (FPlayer <> nil) and Assigned(T_libvlc_audio_set_mute) then
-    begin
-      T_libvlc_audio_set_mute(FPlayer, 0);
-      Log('Звук включен');
-    end;
-  end;
+  SetMuted(False);
 end;
 
 procedure TVlcPlayer.ToggleMute;
 begin
-  if IsMuted then
-    Unmute
-  else
-    Mute;
+  SetMuted(not FMuted);
 end;
 
 function TVlcPlayer.IsMuted: Boolean;
 begin
-  if (FPlayer <> nil) and Assigned(T_libvlc_audio_get_mute) then
+  if (FPlayer <> nil) and Assigned(T_libvlc_audio_get_mute) and not FShutdownMode then
   begin
-    FMuted := T_libvlc_audio_get_mute(FPlayer) <> 0;
-    Result := FMuted;
-  end
-  else
-    Result := FMuted;
-end;
-
-procedure TVlcPlayer.Play;
-var
-  ResultCode: Integer;
-begin
-  if not IsInitialized then
-    InitVLC;
-
-  if FPlayer = nil then
-  begin
-    Log('Ошибка: Плеер не инициализирован');
-    Exit;
-  end;
-
-  Log('Запуск воспроизведения...');
-
-  // Убедимся, что видео выводится на правильный handle
-  if FVideoHandle <> 0 then
-  begin
-    Log('Проверка вывода видео: handle ' + IntToStr(FVideoHandle));
-    T_libvlc_media_player_set_hwnd(FPlayer, Pointer(FVideoHandle));
-
-    // Даем время на установку
-    Sleep(50);
-  end;
-
-  SendLoadingEvent('PLAYBACK_STARTING');
-
-  ResultCode := T_libvlc_media_player_play(FPlayer);
-
-  if ResultCode = 0 then
-  begin
-    Log('Команда воспроизведения отправлена');
-
-    // Дополнительная проверка через небольшую задержку
-    if FVideoHandle <> 0 then
-    begin
-      // Используем PostMessage для отложенного вызова
-      PostMessage(Handle, WM_USER + 1, 0, 0);
+    try
+      FMuted := T_libvlc_audio_get_mute(FPlayer) <> 0;
+      Result := FMuted;
+    except
+      Result := FMuted;
     end;
   end
   else
+    Result := FMuted;
+end;
+
+procedure TVlcPlayer.EnableAudioSync(Enabled: Boolean);
+begin
+  FAudioSyncEnabled := Enabled;
+  if FSyncTimer <> nil then
+    FSyncTimer.Enabled := Enabled and IsPlaying;
+end;
+
+procedure TVlcPlayer.SetAudioDelay(DelayMs: Integer);
+begin
+  FAudioDelay := DelayMs;
+end;
+
+procedure TVlcPlayer.SetTargetFPS(FPS: Integer);
+begin
+  FTargetFPS := Max(15, Min(60, FPS));
+  if FFrameTimer <> nil then
+    FFrameTimer.Interval := 1000 div FTargetFPS;
+end;
+
+function TVlcPlayer.GetCurrentFPS: Integer;
+begin
+  Result := FCurrentFPS;
+end;
+
+procedure TVlcPlayer.EnableHighPerformanceMode(Enabled: Boolean);
+begin
+  if Enabled then
+    SetTargetFPS(30)
+  else
+    SetTargetFPS(60);
+end;
+
+procedure TVlcPlayer.ClearBuffer;
+begin
+  ClearVideoBuffer;
+end;
+
+procedure TVlcPlayer.ShowStatusBar(const AText: string = '');
+begin
+  if AText <> '' then
+    FStatusBarText := AText;
+
+  FStatusBarVisible := True;
+  Invalidate;
+end;
+
+procedure TVlcPlayer.HideStatusBar;
+begin
+  FStatusBarVisible := False;
+  Invalidate;
+end;
+
+procedure TVlcPlayer.UpdateStatusBar(const AText: string);
+begin
+  if FStatusBarText <> AText then
   begin
-    SetState(vlcError);
-    FIsLoading := False;
-    FLoadingProgress := 0;
-    SendLoadingEvent('PLAYBACK_ERROR');
-    Log('Ошибка воспроизведения, код: ' + IntToStr(ResultCode));
-    if Assigned(FOnError) then
-      FOnError(Self);
+    FStatusBarText := AText;
+    if FStatusBarVisible then
+      Invalidate;
   end;
 end;
 
-procedure TVlcPlayer.Pause;
+procedure TVlcPlayer.SetStatusBarStyle(FontSize: Integer; BackgroundColor, TextColor: TColor; CornerRadius: Integer = 8);
 begin
-  if FPlayer = nil then Exit;
+  FStatusBarFontSize := FontSize;
+  FStatusBarBackground := BackgroundColor;
+  FStatusBarTextColor := TextColor;
+  FStatusBarCornerRadius := CornerRadius;
 
-  T_libvlc_media_player_pause(FPlayer);
-  Log('Команда паузы отправлена');
-  SendLoadingEvent('PLAYBACK_PAUSED');
+  if FStatusBarVisible then
+    Invalidate;
 end;
 
-procedure TVlcPlayer.Stop;
+procedure TVlcPlayer.ShowDisplayText(const AText: string = '');
 begin
-  if FPlayer = nil then Exit;
-
-  Log('Остановка воспроизведения...');
-
-  FProgressTimer.Enabled := False;
-  T_libvlc_media_player_stop(FPlayer);
-
-  SetState(vlcStopped);
-  FIsLoading := False;
-  FLoadingProgress := 0;
-
-  SendLoadingEvent('PLAYBACK_STOPPED');
-  Log('Воспроизведение остановлено');
+  if AText <> '' then
+    FDisplayText := AText;
+  FDisplayTextVisible := True;
+  Invalidate;
 end;
 
-procedure TVlcPlayer.LoadMedia(const APath: string);
+procedure TVlcPlayer.HideDisplayText;
+begin
+  FDisplayTextVisible := False;
+  Invalidate;
+end;
+
+procedure TVlcPlayer.SetDisplayTextStyle(FontSize: Integer; TextColor, BackgroundColor: TColor;
+  BackgroundAlpha: Integer = 180; CornerRadius: Integer = 8);
+begin
+  FDisplayTextFontSize := FontSize;
+  FDisplayTextColor := TextColor;
+  FDisplayTextBackground := BackgroundColor;
+  FDisplayTextBackgroundAlpha := BackgroundAlpha;
+  FDisplayTextCornerRadius := CornerRadius;
+
+  if FDisplayTextVisible then
+    Invalidate;
+end;
+
+procedure TVlcPlayer.SetTopImage(const AImagePath: string; Show: Boolean = True);
+begin
+  FTopImagePath := AImagePath;
+  FShowTopImage := Show;
+
+  if Show then
+    LoadTopImage;
+
+  Invalidate;
+end;
+
+procedure TVlcPlayer.HideTopImage;
+begin
+  FShowTopImage := False;
+  Invalidate;
+end;
+
+procedure TVlcPlayer.TakeSnapshot(const AFileName: string);
+begin
+  if (FVideoBitmap <> nil) and not FVideoBitmap.Empty then
+  begin
+    try
+      FVideoBitmap.SaveToFile(AFileName);
+    except
+    end;
+  end;
+end;
+
+procedure TVlcPlayer.StartStreamHealthMonitor;
+begin
+  if FHealthTimer = nil then
+  begin
+    FHealthTimer := TTimer.Create(Self);
+    FHealthTimer.Interval := 30000;
+    FHealthTimer.OnTimer := HealthCheckTimerTick;
+  end;
+  FHealthTimer.Enabled := True;
+  FStreamStartTime := Now;
+end;
+
+procedure TVlcPlayer.HealthCheckTimerTick(Sender: TObject);
 var
-  MediaType: string;
-  Options: TStringList;
-  I: Integer;
+  CurrentTime: Cardinal;
+  TimeSinceLastFrame: Cardinal;
 begin
-  Log('=== ЗАГРУЗКА МЕДИА ===');
-  Log('URL: ' + APath);
+  if not IsPlaying then Exit;
 
-  if not IsInitialized then
-    InitVLC;
+  CurrentTime := GetTickCount;
+  TimeSinceLastFrame := CurrentTime - FLastFrameUpdateTime;
 
-  SendLoadingEvent('LOADING_START');
-
-  if APath = '' then
+  if (TimeSinceLastFrame > 3000) and (FState = vlcPlaying) then
   begin
-    Log('Ошибка: Пустой URL медиа');
-    SendLoadingEvent('LOADING_ERROR', 0);
-    Exit;
+    if not FShowLoading then
+    begin
+      if not FBufferValid then
+        ForceVideoRecovery
+      else
+      begin
+        FShowLoading := True;
+        Invalidate;
+      end;
+    end;
   end;
 
-  StopCurrentStream;
+  if FAutoRestartEnabled then
+  begin
+    var MinutesRunning := MinutesBetween(Now, FStreamStartTime);
+    if MinutesRunning >= FAutoRestartInterval then
+      AutoRestartCheck;
+  end;
 
-  ApplyAppropriateHeaders(APath);
+  CheckMemoryUsage;
+end;
 
-  SetState(vlcLoading);
-  FIsLoading := True;
-  FLoadingProgress := 0;
-  FLoadStartTime := GetTickCount;
-  FLastProgressUpdate := GetTickCount;
+procedure TVlcPlayer.CheckMemoryUsage;
+var
+  MemStatus: TMemoryStatus;
+  CurrentTime: Cardinal;
+begin
+  CurrentTime := GetTickCount;
 
-  FProgressTimer.Enabled := True;
+  if CurrentTime - FLastMemoryCheck < 30000 then Exit;
 
-  if Assigned(FOnLoading) then
-    FOnLoading(Self);
+  GlobalMemoryStatus(MemStatus);
 
-  if Assigned(FOnLoadingProgress) then
-    FOnLoadingProgress(Self, 0);
+  if MemStatus.dwMemoryLoad > 90 then
+  begin
+    if IsPlaying then
+      EmergencyMemoryOptimization
+    else
+      ClearVideoBuffer;
+  end
+  else if MemStatus.dwMemoryLoad > 85 then
+  begin
+    if IsPlaying then
+      AdjustPerformanceSettings;
+  end
+  else if FAdjustedCache then
+  begin
+    FAdjustedCache := False;
+  end;
+
+  FLastMemoryCheck := CurrentTime;
+end;
+
+procedure TVlcPlayer.EmergencyMemoryOptimization;
+begin
+  if (FVideoBitmap <> nil) and (FVideoBitmap.Width > 0) and (FVideoBitmap.Height > 0) then
+  begin
+    try
+      var TempWidth := Max(640, FVideoBitmap.Width div 2);
+      var TempHeight := Max(480, FVideoBitmap.Height div 2);
+
+      if (TempWidth < FVideoBitmap.Width) or (TempHeight < FVideoBitmap.Height) then
+      begin
+        FVideoBitmap.Width := TempWidth;
+        FVideoBitmap.Height := TempHeight;
+      end;
+    except
+    end;
+  end;
 
   try
-    // Создаем или обновляем видео панель
-    UpdateVideoHandle;
+    SetProcessWorkingSetSize(GetCurrentProcess, SIZE_T(-1), SIZE_T(-1));
+  except
+  end;
 
-    if FVideoHandle = 0 then
-    begin
-      Log('Критическая ошибка: Не удалось создать видео окно');
-      raise Exception.Create('Не удалось инициализировать видео окно');
-    end;
+  if FVideoBufferSize > (8 * 1024 * 1024) then
+    ClearVideoBuffer;
 
-    // Освобождаем предыдущие ресурсы
-    if FPlayer <> nil then
-    begin
-      T_libvlc_media_player_release(FPlayer);
-      FPlayer := nil;
-    end;
+  if FFrameTimer <> nil then
+  begin
+    var OriginalInterval := FFrameTimer.Interval;
+    var MemStatus: TMemoryStatus;
+    GlobalMemoryStatus(MemStatus);
 
-    if FMedia <> nil then
-    begin
-      T_libvlc_media_release(FMedia);
-      FMedia := nil;
-    end;
+    var NewInterval: Integer;
+    if MemStatus.dwMemoryLoad > 95 then
+      NewInterval := 66
+    else if MemStatus.dwMemoryLoad > 90 then
+      NewInterval := 50
+    else
+      NewInterval := 33;
 
-    if not IsInitialized then
-      InitVLC;
+    if NewInterval > OriginalInterval then
+      FFrameTimer.Interval := NewInterval;
+  end;
+end;
 
-    // Создаем медиа объект
-    if (Pos('http://', LowerCase(APath)) = 1) or (Pos('https://', LowerCase(APath)) = 1) then
-    begin
-      MediaType := 'HTTP/HTTPS поток';
-      FMedia := T_libvlc_media_new_location(FInstance, PAnsiChar(UTF8Encode(APath)));
+procedure TVlcPlayer.AdjustPerformanceSettings;
+begin
+  if FAdjustedCache then Exit;
 
-      if Assigned(T_libvlc_media_add_option) then
-      begin
-        Options := BuildVlcOptions;
-        try
-          for I := 0 to Options.Count - 1 do
-          begin
-            T_libvlc_media_add_option(FMedia, PAnsiChar(UTF8Encode(Options[I])));
-            Log('Добавлена опция: ' + Options[I]);
-          end;
-        finally
-          Options.Free;
+  if FPlayer <> nil then
+  begin
+    try
+      var Options := TStringList.Create;
+      try
+        Options.Add(':network-caching=3000');
+        Options.Add(':live-caching=3000');
+        Options.Add(':file-caching=3000');
+        Options.Add('--avcodec-skip-frame=3');
+        Options.Add('--avcodec-skip-idct=3');
+        Options.Add('--avcodec-fast');
+
+        for var I := 0 to Options.Count - 1 do
+        begin
+          if Assigned(T_libvlc_media_add_option) and (FMedia <> nil) then
+            T_libvlc_media_add_option(FMedia, PAnsiChar(AnsiString(Options[I])));
         end;
-
-        ApplyQualitySettings;
+      finally
+        Options.Free;
       end;
+    except
+    end;
+  end;
+
+  FAdjustedCache := True;
+end;
+
+procedure TVlcPlayer.AutoRestartCheck;
+begin
+  if not FAutoRestartEnabled or not IsPlaying then Exit;
+  ForceSoftRestart;
+end;
+
+procedure TVlcPlayer.ForceSoftRestart;
+var
+  CurrentURL: string;
+  CurrentPosition: Single;
+begin
+  if not IsPlaying then Exit;
+
+  CurrentURL := FMediaURL;
+  CurrentPosition := GetPlaybackPosition;
+
+  PostMessage(Handle, WM_USER + 500, 0, 0);
+
+  FTempRestartURL := CurrentURL;
+  FTempRestartPosition := CurrentPosition;
+end;
+
+procedure TVlcPlayer.ResetPerformanceSettings;
+begin
+  FAdjustedCache := False;
+  if FFrameTimer <> nil then
+    FFrameTimer.Interval := 33;
+end;
+
+procedure TVlcPlayer.EnableAutoRestart(Enabled: Boolean; IntervalMinutes: Integer = 60);
+begin
+  FAutoRestartEnabled := Enabled;
+  FAutoRestartInterval := IntervalMinutes;
+end;
+
+procedure TVlcPlayer.ResetStreamState;
+begin
+  FAdjustedCache := False;
+  FLastFrameUpdateTime := GetTickCount;
+  FStreamStartTime := Now;
+end;
+
+procedure TVlcPlayer.ForceVideoRecovery;
+begin
+  if not IsPlaying then Exit;
+
+  try
+    var WasPlaying := IsPlaying;
+
+    if WasPlaying then
+      Pause;
+
+    EnhancedFreeVideoBuffer;
+
+    if (FVideoWidth > 0) and (FVideoHeight > 0) then
+      AllocateVideoBuffer(FVideoWidth, FVideoHeight);
+
+    if WasPlaying and IsPaused then
+      Play;
+
+  except
+  end;
+end;
+
+procedure TVlcPlayer.StopAllTimers;
+begin
+  try
+    if FHealthTimer <> nil then
+    begin
+      FHealthTimer.Enabled := False;
+      FHealthTimer.OnTimer := nil;
+    end;
+  except end;
+
+  try
+    if FFrameTimer <> nil then
+    begin
+      FFrameTimer.Enabled := False;
+      FFrameTimer.OnTimer := nil;
+    end;
+  except end;
+
+  try
+    if FPositionTimer <> nil then
+    begin
+      FPositionTimer.Enabled := False;
+      FPositionTimer.OnTimer := nil;
+    end;
+  except end;
+
+  try
+    if FSyncTimer <> nil then
+    begin
+      FSyncTimer.Enabled := False;
+      FSyncTimer.OnTimer := nil;
+    end;
+  except end;
+
+  try
+    if FFallbackTimer <> nil then
+    begin
+      FFallbackTimer.Enabled := False;
+      FFallbackTimer.OnTimer := nil;
+    end;
+  except end;
+end;
+
+procedure TVlcPlayer.StopVLCPlayback;
+begin
+  if (FPlayer <> nil) and Assigned(T_libvlc_media_player_stop) then
+  begin
+    try
+      T_libvlc_media_player_stop(FPlayer);
+      Sleep(100);
+    except
+    end;
+  end;
+end;
+
+procedure TVlcPlayer.FreeVLCResources;
+begin
+  if FPlayer <> nil then
+  begin
+    try
+      if Assigned(T_libvlc_media_player_release) then
+        T_libvlc_media_player_release(FPlayer);
+    except
+    end;
+    FPlayer := nil;
+  end;
+
+  if FMedia <> nil then
+  begin
+    try
+      if Assigned(T_libvlc_media_release) then
+        T_libvlc_media_release(FMedia);
+    except
+    end;
+    FMedia := nil;
+  end;
+
+  if FInstance <> nil then
+  begin
+    try
+      if Assigned(T_libvlc_release) then
+        T_libvlc_release(FInstance);
+    except
+    end;
+    FInstance := nil;
+  end;
+
+  FEventManager := nil;
+end;
+
+procedure TVlcPlayer.EnhancedFreeVideoBuffer;
+var
+  I: Integer;
+begin
+  if FFrameLock = nil then Exit;
+
+  if FFrameLock.TryEnter then
+  try
+    for I := 0 to 1 do
+    begin
+      if (FVideoBuffer[I] <> nil) and (FVideoBufferSize > 0) then
+      begin
+        try
+          FreeMem(FVideoBuffer[I], FVideoBufferSize);
+        except
+        end;
+        FVideoBuffer[I] := nil;
+      end;
+    end;
+
+    if (FBackBuffer <> nil) and (FVideoBufferSize > 0) then
+    begin
+      try
+        FreeMem(FBackBuffer, FVideoBufferSize);
+      except
+      end;
+      FBackBuffer := nil;
+    end;
+
+    FBufferValid := False;
+    FFrameReady := False;
+
+  finally
+    FFrameLock.Leave;
+  end;
+end;
+
+procedure TVlcPlayer.UpdateVideoSize(Width, Height: Integer);
+begin
+  if (Width <= 0) or (Height <= 0) then Exit;
+
+  if (FVideoWidth <> Width) or (FVideoHeight <> Height) then
+  begin
+    FFrameLock.Enter;
+    try
+      FVideoWidth := Width;
+      FVideoHeight := Height;
+      AllocateVideoBuffer(Width, Height);
+
+      if Assigned(FPlayer) and Assigned(T_libvlc_video_set_format) then
+      begin
+        T_libvlc_video_set_format(
+          FPlayer,
+          'BGRA',
+          Width,
+          Height,
+          FVideoPitch
+        );
+      end;
+    finally
+      FFrameLock.Leave;
+    end;
+
+    Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.SetupMemoryRendering;
+var
+  Chroma: AnsiString;
+begin
+  if (FPlayer = nil) or not Assigned(T_libvlc_video_set_callbacks) then
+    Exit;
+
+  T_libvlc_video_set_callbacks(FPlayer,
+    @VlcLockCallback,
+    @VlcUnlockCallback,
+    @VlcDisplayCallback,
+    Self);
+
+  FVideoWidth := 1920;
+  FVideoHeight := 1080;
+  FVideoPitch := FVideoWidth * 4;
+
+  AllocateVideoBuffer(FVideoWidth, FVideoHeight);
+
+  if FBackBuffer = nil then
+    Exit;
+
+  Chroma := 'BGRA';
+  try
+    T_libvlc_video_set_format(FPlayer, PAnsiChar(Chroma),
+      FVideoWidth, FVideoHeight, FVideoPitch);
+  except
+    TryAlternativeFormats;
+  end;
+
+  if FFrameTimer <> nil then
+  begin
+    FFrameTimer.Interval := 16;
+    FFrameTimer.Enabled := True;
+  end;
+end;
+
+procedure TVlcPlayer.GetVideoSize(var Width, Height: Integer);
+var
+  W, H: Cardinal;
+begin
+  Width := 0;
+  Height := 0;
+
+  if not Assigned(FPlayer) or not Assigned(T_libvlc_video_get_size) then
+    Exit;
+
+  try
+    if T_libvlc_video_get_size(FPlayer, 0, W, H) = 0 then
+    begin
+      Width := W;
+      Height := H;
+    end;
+  except
+    Width := 640;
+    Height := 480;
+  end;
+end;
+
+procedure TVlcPlayer.AllocateVideoBuffer(Width, Height: Integer);
+var
+  I: Integer;
+begin
+  if (csDestroying in ComponentState) then Exit;
+
+  if FFrameLock = nil then Exit;
+
+  FFrameLock.Enter;
+  try
+    if (Width * Height) > (1920 * 1080) then
+    begin
+      Width := 1920;
+      Height := 1080;
+    end;
+
+    if (Width <= 0) then Width := 1920;
+    if (Height <= 0) then Height := 1080;
+
+    FVideoPitch := Width * 4;
+    FVideoPitch := (FVideoPitch + 3) and not 3;
+
+    FVideoBufferSize := Height * FVideoPitch;
+
+    for I := 0 to 1 do
+    begin
+      if FVideoBuffer[I] <> nil then
+      begin
+        FreeMem(FVideoBuffer[I]);
+        FVideoBuffer[I] := nil;
+      end;
+    end;
+
+    if FBackBuffer <> nil then
+    begin
+      FreeMem(FBackBuffer);
+      FBackBuffer := nil;
+    end;
+
+    FVideoWidth := Width;
+    FVideoHeight := Height;
+
+    try
+      for I := 0 to 1 do
+      begin
+        FVideoBuffer[I] := AllocMem(FVideoBufferSize);
+        if FVideoBuffer[I] <> nil then
+          FillChar(FVideoBuffer[I]^, FVideoBufferSize, 0);
+      end;
+
+      FBackBuffer := AllocMem(FVideoBufferSize);
+      if FBackBuffer <> nil then
+        FillChar(FBackBuffer^, FVideoBufferSize, 0);
+
+      FBufferValid := True;
+      FCurrentBuffer := 0;
+
+    except
+      FBufferValid := False;
+    end;
+
+    if FVideoBitmap = nil then
+      FVideoBitmap := TBitmap.Create;
+
+    try
+      if (FVideoBitmap.Width <> Width) or (FVideoBitmap.Height <> Height) then
+      begin
+        FVideoBitmap.PixelFormat := pf32bit;
+        FVideoBitmap.Width := Width;
+        FVideoBitmap.Height := Height;
+      end;
+    except
+    end;
+
+  finally
+    FFrameLock.Leave;
+  end;
+end;
+
+procedure TVlcPlayer.SwapBuffers;
+var
+  Temp: Pointer;
+begin
+  if FFrameLock = nil then Exit;
+
+  if FFrameLock.TryEnter then
+  try
+    Temp := FVideoBuffer[FCurrentBuffer];
+    FVideoBuffer[FCurrentBuffer] := FBackBuffer;
+    FBackBuffer := Temp;
+
+    FCurrentBuffer := (FCurrentBuffer + 1) mod 2;
+
+  finally
+    FFrameLock.Leave;
+  end;
+end;
+
+procedure TVlcPlayer.ClearVideoBuffer;
+var
+  I: Integer;
+  WasPlaying: Boolean;
+  VideoWidth, VideoHeight: Integer;
+begin
+  if FFrameLock = nil then Exit;
+
+  WasPlaying := IsPlaying;
+
+  VideoWidth := FVideoWidth;
+  VideoHeight := FVideoHeight;
+
+  if FFrameLock.TryEnter then
+  try
+    for I := 0 to 1 do
+    begin
+      if FVideoBuffer[I] <> nil then
+        FillChar(FVideoBuffer[I]^, FVideoBufferSize, 0);
+    end;
+
+    if FBackBuffer <> nil then
+      FillChar(FBackBuffer^, FVideoBufferSize, 0);
+
+    if FVideoBitmap <> nil then
+    begin
+      try
+        FVideoBitmap.Canvas.Brush.Color := clBlack;
+        FVideoBitmap.Canvas.FillRect(Rect(0, 0, FVideoBitmap.Width, FVideoBitmap.Height));
+      except
+      end;
+    end;
+
+    FFrameReady := False;
+    if not WasPlaying then
+      FBufferValid := False;
+
+    FCurrentBuffer := 0;
+
+  finally
+    FFrameLock.Leave;
+  end;
+
+  SafeInvalidate;
+
+  if WasPlaying and (VideoWidth > 0) and (VideoHeight > 0) then
+  begin
+    PostMessage(Handle, WM_USER + 100, VideoWidth, VideoHeight);
+  end;
+end;
+
+procedure TVlcPlayer.UpdateBitmapFromBuffer;
+var
+  Y: Integer;
+  SrcLine, DstLine: PByte;
+begin
+  if (csDestroying in ComponentState) or
+     (FVideoBitmap = nil) or
+     (FVideoBuffer[FCurrentBuffer] = nil) then
+    Exit;
+
+  if not FFrameLock.TryEnter then
+    Exit;
+
+  try
+    if not FBufferValid or not FFrameReady then
+      Exit;
+
+    if (FVideoBitmap.Width <> FVideoWidth) or (FVideoBitmap.Height <> FVideoHeight) then
+    begin
+      FVideoBitmap.PixelFormat := pf32bit;
+      FVideoBitmap.Width := FVideoWidth;
+      FVideoBitmap.Height := FVideoHeight;
+    end;
+
+    for Y := 0 to FVideoHeight - 1 do
+    begin
+      SrcLine := PByte(FVideoBuffer[FCurrentBuffer]);
+      Inc(SrcLine, Y * FVideoPitch);
+
+      DstLine := FVideoBitmap.ScanLine[Y];
+
+      Move(SrcLine^, DstLine^, FVideoWidth * 4);
+    end;
+
+    FFrameReady := False;
+    FLastFrameUpdateTime := GetTickCount;
+
+    CalculateFPS;
+
+  finally
+    FFrameLock.Leave;
+  end;
+end;
+
+procedure TVlcPlayer.CalculateFPS;
+var
+  CurrentTime: Cardinal;
+begin
+  Inc(FFrameCount);
+  CurrentTime := GetTickCount;
+
+  if CurrentTime - FLastFpsTime >= 1000 then
+  begin
+    FCurrentFPS := FFrameCount;
+    FFrameCount := 0;
+    FLastFpsTime := CurrentTime;
+  end;
+end;
+
+procedure TVlcPlayer.FrameTimerTick(Sender: TObject);
+var
+  CurrentTime: Cardinal;
+  TimeSinceFirstFrame: Cardinal;
+begin
+  if (csDestroying in ComponentState) then Exit;
+
+  CurrentTime := GetTickCount;
+
+  if not FBufferValid then
+  begin
+    if (FVideoWidth > 0) and (FVideoHeight > 0) and IsPlaying then
+      AllocateVideoBuffer(FVideoWidth, FVideoHeight);
+    Exit;
+  end;
+
+  if FFrameReady and FBufferValid then
+  begin
+    UpdateBitmapFromBuffer;
+
+    if FFirstFrameTime = 0 then
+      FFirstFrameTime := CurrentTime;
+
+    if FFirstFrameTime > 0 then
+    begin
+      TimeSinceFirstFrame := CurrentTime - FFirstFrameTime;
+      if (TimeSinceFirstFrame >= FAnimationHideDelay) and FShowLoading then
+      begin
+        FShowLoading := False;
+        FFirstFrameTime := 0;
+        Invalidate;
+      end;
+    end;
+
+    Invalidate;
+  end;
+end;
+
+procedure TVlcPlayer.PositionTimerTick(Sender: TObject);
+begin
+end;
+
+procedure TVlcPlayer.SyncTimerTick(Sender: TObject);
+var
+  AudioTime, VideoTime: Int64;
+  TimeDiff: Int64;
+const
+  SYNC_THRESHOLD = 40;
+begin
+  if not FAudioSyncEnabled or (FPlayer = nil) or not IsPlaying then
+    Exit;
+
+  try
+    if Assigned(T_libvlc_media_player_get_time) then
+    begin
+      AudioTime := T_libvlc_media_player_get_time(FPlayer);
+      VideoTime := FLastAudioTime;
+
+      TimeDiff := Abs(AudioTime - VideoTime);
+
+      if TimeDiff > SYNC_THRESHOLD then
+      begin
+        if AudioTime > VideoTime then
+          FFrameTimer.Interval := Max(16, 33 - (TimeDiff div 3))
+        else
+          FFrameTimer.Interval := Min(50, 33 + (TimeDiff div 3));
+      end
+      else
+      begin
+        FFrameTimer.Interval := 33;
+      end;
+
+      FLastAudioTime := AudioTime;
+    end;
+  except
+  end;
+end;
+
+procedure TVlcPlayer.FallbackTimerTick(Sender: TObject);
+begin
+  if FShowLoading and FIsLoading then
+  begin
+    FShowLoading := False;
+    Invalidate;
+
+    if (FPlayer <> nil) and Assigned(T_libvlc_media_player_is_playing) then
+    begin
+      if T_libvlc_media_player_is_playing(FPlayer) <> 0 then
+      begin
+        SetState(vlcPlaying);
+        FIsLoading := False;
+      end
+      else
+      begin
+        SetState(vlcError);
+        FIsLoading := False;
+        if Assigned(FOnError) then
+          FOnError(Self, -1, 'Playback timeout');
+      end;
+    end;
+
+    FFallbackTimer.Enabled := False;
+  end;
+end;
+
+function TVlcPlayer.LockCallback(opaque: Pointer; planes: PPointer): Pointer; cdecl;
+begin
+  Result := nil;
+  if (opaque = nil) or (GDestroyedPlayers = nil) then Exit;
+  if GDestroyedPlayers.Contains(TVlcPlayer(opaque)) then Exit;
+
+  try
+    with TVlcPlayer(opaque) do
+    begin
+      if FShutdownMode or (csDestroying in ComponentState) then Exit;
+      if FBackBuffer = nil then Exit;
+
+      Result := FBackBuffer;
+      if planes <> nil then
+        planes^ := FBackBuffer;
+    end;
+  except
+    Result := nil;
+  end;
+end;
+
+procedure TVlcPlayer.UnlockCallback(opaque: Pointer; picture: Pointer; planes: PPointer); cdecl;
+begin
+  if (opaque = nil) or (GDestroyedPlayers = nil) then Exit;
+  if GDestroyedPlayers.Contains(TVlcPlayer(opaque)) then Exit;
+
+  try
+    with TVlcPlayer(opaque) do
+    begin
+      if FShutdownMode or (csDestroying in ComponentState) then Exit;
+
+      if FFrameLock.TryEnter then
+      try
+        SwapBuffers;
+        FFrameReady := True;
+      finally
+        FFrameLock.Leave;
+      end;
+    end;
+  except
+  end;
+end;
+
+procedure TVlcPlayer.InitVLC;
+var
+  VlcOptions: TStringList;
+  VlcArgs: array of PAnsiChar;
+  I: Integer;
+  LibName: string;
+begin
+  if Assigned(FInstance) then
+    Exit;
+
+  if FLibPath = '' then
+    LibName := 'libvlc.dll'
+  else
+    LibName := FLibPath;
+
+  SetDllDirectory(PChar(FLibPath));
+  FLibHandle := LoadLibrary('libvlc.dll');
+  SetDllDirectory(nil);
+
+  if FLibHandle = 0 then
+  begin
+    SetState(vlcError);
+    if Assigned(FOnError) then
+      FOnError(Self, -100, 'Не удалось загрузить libvlc.dll');
+    Exit;
+  end;
+
+  try
+    LoadFunctions;
+  except
+    FreeLibrary(FLibHandle);
+    FLibHandle := 0;
+    SetState(vlcError);
+    Exit;
+  end;
+
+  VlcOptions := BuildVlcOptions;
+  try
+    SetLength(VlcArgs, VlcOptions.Count);
+    for I := 0 to VlcOptions.Count - 1 do
+      VlcArgs[I] := PAnsiChar(AnsiString(VlcOptions[I]));
+
+    if VlcOptions.Count > 0 then
+      FInstance := T_libvlc_new(Length(VlcArgs), @VlcArgs[0])
+    else
+      FInstance := T_libvlc_new(0, nil);
+
+    if FInstance = nil then
+    begin
+      FreeLibrary(FLibHandle);
+      FLibHandle := 0;
+      SetState(vlcError);
     end
     else
     begin
-      MediaType := 'Локальный файл';
-      FMedia := T_libvlc_media_new_path(FInstance, PAnsiChar(UTF8Encode(APath)));
+      SetState(vlcIdle);
+    end;
+  finally
+    VlcOptions.Free;
+  end;
+
+  SetDllDirectory(nil);
+end;
+
+procedure TVlcPlayer.LoadFunctions;
+begin
+  @T_libvlc_new := GetProcAddress(FLibHandle, 'libvlc_new');
+  @T_libvlc_release := GetProcAddress(FLibHandle, 'libvlc_release');
+  @T_libvlc_media_new_location := GetProcAddress(FLibHandle, 'libvlc_media_new_location');
+  @T_libvlc_media_new_path := GetProcAddress(FLibHandle, 'libvlc_media_new_path');
+  @T_libvlc_media_release := GetProcAddress(FLibHandle, 'libvlc_media_release');
+  @T_libvlc_media_player_new_from_media := GetProcAddress(FLibHandle, 'libvlc_media_player_new_from_media');
+  @T_libvlc_media_player_release := GetProcAddress(FLibHandle, 'libvlc_media_player_release');
+  @T_libvlc_media_player_play := GetProcAddress(FLibHandle, 'libvlc_media_player_play');
+  @T_libvlc_media_player_pause := GetProcAddress(FLibHandle, 'libvlc_media_player_pause');
+  @T_libvlc_media_player_stop := GetProcAddress(FLibHandle, 'libvlc_media_player_stop');
+  @T_libvlc_audio_set_volume := GetProcAddress(FLibHandle, 'libvlc_audio_set_volume');
+  @T_libvlc_media_add_option := GetProcAddress(FLibHandle, 'libvlc_media_add_option');
+  @T_libvlc_media_player_get_time := GetProcAddress(FLibHandle, 'libvlc_media_player_get_time');
+  @T_libvlc_media_player_set_time := GetProcAddress(FLibHandle, 'libvlc_media_player_set_time');
+  @T_libvlc_media_player_get_position := GetProcAddress(FLibHandle, 'libvlc_media_player_get_position');
+  @T_libvlc_media_player_set_position := GetProcAddress(FLibHandle, 'libvlc_media_player_set_position');
+  @T_libvlc_event_attach := GetProcAddress(FLibHandle, 'libvlc_event_attach');
+  @T_libvlc_media_player_event_manager := GetProcAddress(FLibHandle, 'libvlc_media_player_event_manager');
+  @T_libvlc_audio_set_mute := GetProcAddress(FLibHandle, 'libvlc_audio_set_mute');
+  @T_libvlc_audio_get_mute := GetProcAddress(FLibHandle, 'libvlc_audio_get_mute');
+  @T_libvlc_media_player_is_playing := GetProcAddress(FLibHandle, 'libvlc_media_player_is_playing');
+  @T_libvlc_video_set_callbacks := GetProcAddress(FLibHandle, 'libvlc_video_set_callbacks');
+  @T_libvlc_video_set_format := GetProcAddress(FLibHandle, 'libvlc_video_set_format');
+  @T_libvlc_video_get_size := GetProcAddress(FLibHandle, 'libvlc_video_get_size');
+  @T_libvlc_media_player_set_hwnd := GetProcAddress(FLibHandle, 'libvlc_media_player_set_hwnd');
+  @T_libvlc_media_player_get_length := GetProcAddress(FLibHandle, 'libvlc_media_player_get_length');
+
+  if not Assigned(T_libvlc_new) or not Assigned(T_libvlc_media_new_location) then
+    raise Exception.Create('Не удалось загрузить основные функции VLC');
+end;
+
+function TVlcPlayer.BuildVlcOptions: TStringList;
+begin
+  Result := TStringList.Create;
+  try
+    Result.Add('--no-video-title-show');
+    Result.Add('--quiet');
+    Result.Add('--no-stats');
+
+    Result.Add(':network-caching=5000');
+    Result.Add(':live-caching=5000');
+    Result.Add(':file-caching=5000');
+
+    Result.Add('--avcodec-hw=none');
+    Result.Add('--drop-late-frames');
+    Result.Add('--skip-frames');
+
+    Result.Add(':avcodec-fast');
+    Result.Add(':avcodec-skip-frame=0');
+    Result.Add(':avcodec-skip-idct=0');
+
+    Result.Add(':clock-synchro=0');
+    Result.Add(':clock-jitter=0');
+
+    Result.Add(':rtsp-tcp');
+    Result.Add(':tcp-timeout=600000');
+    Result.Add(':ipv4-timeout=600000');
+
+    if FUserAgent <> '' then
+      Result.Add(':http-user-agent=' + FUserAgent);
+
+    if FReferer <> '' then
+      Result.Add(':http-referrer=' + FReferer);
+
+    if FHttpHeaders <> nil then
+    begin
+      for var I := 0 to FHttpHeaders.Count - 1 do
+      begin
+        if FHttpHeaders.Names[I] <> '' then
+          Result.Add(':http-extra-header=' + FHttpHeaders.Names[I] + ': ' + FHttpHeaders.ValueFromIndex[I]);
+      end;
     end;
 
-    Log('Тип медиа: ' + MediaType);
-
-    if FMedia = nil then
-      raise Exception.Create('Не удалось создать медиа объект');
-
-    FPlayer := T_libvlc_media_player_new_from_media(FMedia);
-    if FPlayer = nil then
-      raise Exception.Create('Не удалось создать медиаплеер');
-
-    // КРИТИЧЕСКИ ВАЖНО: Устанавливаем handle ДО setup event handlers
-    Log('Устанавливаем вывод видео на handle: ' + IntToStr(FVideoHandle));
-    T_libvlc_media_player_set_hwnd(FPlayer, Pointer(FVideoHandle));
-
-    // Даем время на инициализацию
-    Sleep(100);
-
-    SetupEventHandlers;
-
-    // Убедимся, что компонент видим
-    if not Visible then
-      Show;
-
-    if FVideoPanel <> nil then
-      FVideoPanel.Show;
-
-    Update;
-
-    if Assigned(T_libvlc_audio_set_volume) then
-      T_libvlc_audio_set_volume(FPlayer, FVolume);
-
-    if Assigned(T_libvlc_audio_set_mute) then
-      T_libvlc_audio_set_mute(FPlayer, Integer(FMuted));
-
-    Log('Медиа успешно загружено, видео будет выводиться на компонент');
-
-    if FAutoPlay then
-      Play
-    else
-      SetState(vlcPaused);
+    if FAdjustedCache then
+    begin
+      Result.Add(':network-caching=8000');
+      Result.Add(':live-caching=8000');
+    end;
 
   except
-    on E: Exception do
-    begin
-      FProgressTimer.Enabled := False;
+    Result.Free;
+    raise;
+  end;
+end;
 
-      SetState(vlcError);
-      FIsLoading := False;
-      FLoadingProgress := 0;
-      SendLoadingEvent('LOADING_ERROR', 0);
-      Log('Ошибка загрузки медиа: ' + E.Message);
-      if Assigned(FOnError) then
-        FOnError(Self);
+procedure TVlcPlayer.SetupEventHandlers;
+begin
+  if (FPlayer <> nil) and Assigned(T_libvlc_media_player_event_manager) then
+  begin
+    FEventManager := T_libvlc_media_player_event_manager(FPlayer);
+    if (FEventManager <> nil) and Assigned(T_libvlc_event_attach) then
+    begin
+      T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerPlaying, @VlcEventCallback, Self);
+      T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerPaused, @VlcEventCallback, Self);
+      T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerStopped, @VlcEventCallback, Self);
+      T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerEndReached, @VlcEventCallback, Self);
+      T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerEncounteredError, @VlcEventCallback, Self);
+      T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerBuffering, @VlcEventCallback, Self);
+      T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerTimeChanged, @VlcEventCallback, Self);
+      T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerPositionChanged, @VlcEventCallback, Self);
+      T_libvlc_event_attach(FEventManager, libvlc_MediaPlayerOpening, @VlcEventCallback, Self);
     end;
   end;
 end;
+
+procedure TVlcPlayer.TryAlternativeFormats;
+const
+  Formats: array[0..3] of AnsiString = ('RV32', 'RV24', 'I420', 'YUY2');
+var
+  I: Integer;
+begin
+  for I := 0 to High(Formats) do
+  begin
+    try
+      T_libvlc_video_set_format(FPlayer, PAnsiChar(Formats[I]),
+        FVideoWidth, FVideoHeight, FVideoPitch);
+      Exit;
+    except
+    end;
+  end;
+end;
+
+procedure TVlcPlayer.SetState(Value: TVlcState);
+begin
+  if FState <> Value then
+  begin
+    FState := Value;
+
+    case Value of
+      vlcLoading:
+        begin
+          if Assigned(FOnLoading) then FOnLoading(Self);
+        end;
+      vlcPlaying:
+        begin
+          if FFrameTimer <> nil then
+            FFrameTimer.Enabled := True;
+          if Assigned(FOnPlaying) then FOnPlaying(Self);
+        end;
+      vlcPaused:
+        begin
+          if FFrameTimer <> nil then
+            FFrameTimer.Enabled := False;
+          if Assigned(FOnPaused) then FOnPaused(Self);
+        end;
+      vlcStopped:
+        begin
+          if FFrameTimer <> nil then
+            FFrameTimer.Enabled := False;
+          if Assigned(FOnStopped) then FOnStopped(Self);
+        end;
+      vlcError:
+        begin
+          if FFrameTimer <> nil then
+            FFrameTimer.Enabled := False;
+        end;
+    end;
+
+    if Assigned(FOnStateChanged) then
+      FOnStateChanged(Self);
+  end;
+end;
+
+procedure TVlcPlayer.FreeVLC;
+begin
+  if Assigned(FFrameTimer) then
+    FFrameTimer.Enabled := False;
+
+  Stop;
+
+  if Assigned(FPlayer) then
+  begin
+    try
+      T_libvlc_media_player_release(FPlayer);
+    except
+    end;
+    FPlayer := nil;
+  end;
+
+  if Assigned(FMedia) then
+  begin
+    try
+      T_libvlc_media_release(FMedia);
+    except
+    end;
+    FMedia := nil;
+  end;
+
+  if Assigned(FInstance) then
+  begin
+    try
+      T_libvlc_release(FInstance);
+    except
+    end;
+    FInstance := nil;
+  end;
+
+  if FLibHandle <> 0 then
+  begin
+    FreeLibrary(FLibHandle);
+    FLibHandle := 0;
+  end;
+
+  ClearVideoBuffer;
+
+  SetState(vlcIdle);
+end;
+
+procedure VlcEventCallback(p_event: Pointer; user_data: Pointer); cdecl;
+var
+  Player: TVlcPlayer;
+  EventType: Integer;
+begin
+  if (user_data = nil) then
+    Exit;
+
+  Player := TVlcPlayer(user_data);
+
+  if Assigned(GDestroyedPlayers) and GDestroyedPlayers.Contains(Player) then
+    Exit;
+
+  if (Player = nil) or (csDestroying in Player.ComponentState) then
+    Exit;
+
+  try
+    EventType := PInteger(p_event)^;
+  except
+    Exit;
+  end;
+
+  case EventType of
+    libvlc_MediaPlayerPlaying:
+      Player.HandlePlayingEvent;
+
+    libvlc_MediaPlayerPaused:
+      Player.HandlePausedEvent;
+
+    libvlc_MediaPlayerStopped:
+      Player.HandleStoppedEvent;
+
+    libvlc_MediaPlayerEndReached:
+      Player.HandleEndReachedEvent;
+
+    libvlc_MediaPlayerEncounteredError:
+      Player.HandleErrorEvent;
+
+    libvlc_MediaPlayerBuffering:
+      Player.HandleBufferingEvent;
+
+    libvlc_MediaPlayerOpening:
+      Player.HandleOpeningEvent;
+
+    libvlc_MediaPlayerTimeChanged:
+      Player.HandleTimeChangedEvent;
+
+    libvlc_MediaPlayerPositionChanged:
+      Player.HandlePositionChangedEvent;
+
+    else
+      begin
+      end;
+  end;
+end;
+
+function VlcLockCallback(opaque: Pointer; planes: PPointer): Pointer; cdecl;
+begin
+  Result := TVlcPlayer(opaque).LockCallback(opaque, planes);
+end;
+
+procedure VlcUnlockCallback(opaque: Pointer; picture: Pointer; planes: PPointer); cdecl;
+begin
+  TVlcPlayer(opaque).UnlockCallback(opaque, picture, planes);
+end;
+
+procedure VlcDisplayCallback(opaque: Pointer; picture: Pointer); cdecl;
+begin
+end;
+
+procedure Register;
+begin
+  RegisterComponents('VLC', [TVlcPlayer]);
+end;
+
+initialization
+  GDestroyedPlayers := TList<TVlcPlayer>.Create;
+
+finalization
+  if GDestroyedPlayers <> nil then
+  begin
+    GDestroyedPlayers.Clear;
+    FreeAndNil(GDestroyedPlayers);
+  end;
 
 end.
