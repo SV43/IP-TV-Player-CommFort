@@ -14,5 +14,7 @@ object FullScreenForm: TFullScreenForm
   KeyPreview = True
   Touch.InteractiveGestureOptions = [igoPanSingleFingerHorizontal, igoPanInertia, igoParentPassthrough]
   WindowState = wsMaximized
+  OnCreate = FormCreate
+  OnKeyDown = FormKeyDown
   TextHeight = 25
 end

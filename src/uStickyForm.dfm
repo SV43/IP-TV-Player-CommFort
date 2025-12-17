@@ -126,29 +126,35 @@ object frmStickyForm: TfrmStickyForm
     ParentBackground = False
     ParentFont = False
     TabOrder = 1
-    object FVlc: TVlcPlayer
+    object FVlc: TVlcVisualComponent
       Left = 1
       Top = 1
       Width = 603
       Height = 428
-      LibPath = 'libvlc.dll'
+      AutoPlay = True
+      Volume = 100
       UserAgent = 
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KH' +
         'TML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       HttpHeaders.Strings = (
         'Accept=*/*'
-        'Accept-Language=en-US,en;q=0.9'
-        'Accept-Encoding=gzip, deflate, br')
+        'Accept-Language=en-US,en;q=0.9')
+      Muted = False
+      LoopPlayback = False
+      AutoRestartEnabled = True
       StatusBarVisible = False
-      StatusBarFontSize = 12
+      StatusBarFontSize = 16
       StatusBarBackground = clBlack
       StatusBarTextColor = clWhite
-      StatusBarCornerRadius = 4
-      OnVideoDblClick = FVlcVideoDblClick
+      StatusBarCornerRadius = 8
       Align = alClient
+      AutoSize = True
+      Caption = 'FVlc'
       Color = clBlack
+      UseDockManager = False
       DoubleBuffered = True
       ParentBackground = False
+      ParentColor = False
       ParentDoubleBuffered = False
       PopupMenu = pmMenu
       TabOrder = 0
@@ -187,13 +193,17 @@ object frmStickyForm: TfrmStickyForm
     Top = 256
     object C1: TMenuItem
       AutoCheck = True
-      Caption = #1057#1087#1080#1089#1086#1082' '#1082#1072#1085#1072#1083#1086#1074
+      Caption = #1055#1072#1085#1077#1083#1080' '#1091#1087#1088#1072#1074#1083#1077#1085#1080#1103
       Checked = True
       OnClick = C1Click
     end
     object N1: TMenuItem
       Caption = #1053#1072#1089#1090#1088#1086#1081#1082#1080
       OnClick = N1Click
+    end
+    object N1231: TMenuItem
+      Caption = '123'
+      OnClick = N1231Click
     end
   end
   object PlayerStatus: TTimer

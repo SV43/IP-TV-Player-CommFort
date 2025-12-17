@@ -62,8 +62,9 @@ type
     Panel_Channels: TPanel;
     Panel_VLC_Player: TPanel;
     PlayerStatus: TTimer;
-    FVlc: TVlcPlayer;
     TimeEpgStatus: TTimer;
+    FVlc: TVlcVisualComponent;
+    N1231: TMenuItem;
 
     procedure C1Click(Sender: TObject);
     procedure sbOpenClick(Sender: TObject);
@@ -88,7 +89,7 @@ type
     procedure TimeEpgStatusTimer(Sender: TObject);
     procedure sbFullScreenClick(Sender: TObject);
     procedure FVlcDblClick(Sender: TObject);
-    procedure FVlcVideoDblClick(Sender: TObject);
+    procedure N1231Click(Sender: TObject);
   private
     FChannels: TList<TChannelInfo>;
     FLogoMap: TDictionary<string, Integer>;
@@ -249,8 +250,8 @@ end;
 procedure TfrmStickyForm.ImageTrackBar1Change(Sender: TObject);
 begin
   FVlc.Volume := tvVolume.Position;
-  FVlc.SetDisplayText('Громкость ' + IntToStr(tvVolume.Position) + '%');
-  FVlc.SetDisplayTextVisible(True);
+  FVlc.ShowStatusBar('Громкость ' + IntToStr(tvVolume.Position) + '%');
+  FVlc.ShowStatusBar;
   FVlc.ShowTopImage := False;
 
   if FVlc.IsMuted then
@@ -277,7 +278,7 @@ begin
         begin
           if FVlc.Volume = tvVolume.Position then // Проверяем, что громкость не изменилась
           begin
-            FVlc.SetDisplayTextVisible(False);
+            FVlc.HideStatusBar;
             FVlc.Invalidate;
           end;
         end);
@@ -859,12 +860,12 @@ begin
 
   if not FVlc.IsPlaying then
   begin
-    FVlc.SetDisplayTextVisible(False);
+    FVlc.HideStatusBar;
     OutputDebugString(PChar('EpgStatus: не играет, скрываем текст'));
     Exit;
   end;
 
-  currentUrl := FVlc.GetCurrentMediaURL;
+  currentUrl := FVlc.FMediaURL;
   if currentUrl = '' then
     currentUrl := FVlc.MediaURL;
 
@@ -883,7 +884,7 @@ begin
 
   if not Assigned(ch) then
   begin
-    FVlc.SetDisplayTextVisible(False);
+    FVlc.HideStatusBar;
     OutputDebugString(PChar('EpgStatus: канал не найден'));
     Exit;
   end;
@@ -969,17 +970,8 @@ begin
   end;
 
   // ОСНОВНОЕ ИСПРАВЛЕНИЕ: устанавливаем текст и делаем его видимым
-  FVlc.SetDisplayText(displayText);
-  FVlc.SetDisplayTextVisible(True);
 
-  // Настраиваем стиль текста
-  FVlc.SetDisplayTextStyle(
-    14,                    // Размер шрифта
-    clWhite,              // Цвет текста
-    $80202020,            // Полупрозрачный черный фон
-    220,                  // Alpha канал
-    8                     // Закругление
-  );
+  FVlc.ShowStatusBar(displayText);
 
   OutputDebugString(PChar('EpgStatus: установлен текст = ' + displayText));
 
@@ -1028,7 +1020,15 @@ procedure TfrmStickyForm.OnError(Sender: TObject);
 begin
   OutputDebugString(PChar('OnError: ошибка воспроизведения'));
   LoadPNGToControl(FButtonDir + 'play.png', sbPlay);
-  FVlc.SetDisplayTextVisible(False);
+  FVlc.HideStatusBar;
+end;
+
+procedure TfrmStickyForm.N1231Click(Sender: TObject);
+begin
+showmessage(FButtonDir + 'volume-mute-player.png');
+Fvlc.TopImagePath := 'C:\Program Files (x86)\CommFort\Plugins\IPTV_Plugin\image-button\volume-mute-player.png';
+Fvlc.ShowTopImage := False;
+Fvlc.ForceRedrawTopImage;
 end;
 
 procedure TfrmStickyForm.N1Click(Sender: TObject);
@@ -1118,18 +1118,6 @@ begin
   FVlc.LibPath := ExtractFilePath(ParamStr(0)) + 'Plugins\IPTV_Plugin';
   FVlc.ShowTopImage := False;
 
-  // Инициализация текста EPG
-  FVlc.SetDisplayTextVisible(True);
-  FVlc.SetDisplayText('Загрузка...');
-
-  // Настройка стиля по умолчанию для текста EPG
-  FVlc.SetDisplayTextStyle(
-    14,                    // Размер шрифта
-    clWhite,              // Цвет текста
-    $80202020,            // Полупрозрачный черный фон
-    220,                  // Прозрачность
-    8                     // Закругление
-  );
 
   // Настройка интервалов таймеров
   TimeEpgStatus.Interval := 30000;  // Обновление EPG каждые 30 секунд
@@ -1198,35 +1186,22 @@ begin
     end
        else
        LoadPNGToControl(FButtonDir + 'volume.png', sbVolume);
-
-    FVlc.TopImagePath := FButtonDir + 'volume-mute-player.png';
+       FVlc.TopImagePath := FButtonDir + 'volume-mute-player.png';
   end;
 
   if not Assigned(lbChannels.OnDrawItem) then
     lbChannels.OnDrawItem := lbChannelsDrawItem;
 
   // Тестовый вывод текста при показе формы
-  FVlc.SetDisplayText('Тест: Форма показана');
-  FVlc.SetDisplayTextVisible(True);
+  FVlc.ShowStatusBar;
   FVlc.Invalidate;
+
+  FVlc.ShowTopImage := False;
 
   OutputDebugString(PChar('FormShow: форма показана, тестовый текст установлен'));
 end;
 
 procedure TfrmStickyForm.FVlcDblClick(Sender: TObject);
-begin
-  if not (FVlc.Parent is TFullScreenForm) then
-  begin
-    sbFullScreenClick(self);
-  end;
-    if IsModalWindowOpen(TFullScreenForm) then
-    begin
-      keybd_event(VK_ESCAPE, 0, 0, 0);
-      keybd_event(VK_ESCAPE, 0, KEYEVENTF_KEYUP, 0);
-    end;
-end;
-
-procedure TfrmStickyForm.FVlcVideoDblClick(Sender: TObject);
 begin
   if not (FVlc.Parent is TFullScreenForm) then
   begin
@@ -1275,7 +1250,7 @@ begin
   end
   else
   begin
-    FVlc.SetDisplayTextVisible(False);
+    FVlc.HideStatusBar;
     OutputDebugString(PChar('TimeEpgStatusTimer: не играет, скрываем текст'));
   end;
 end;
@@ -1300,11 +1275,13 @@ begin
   if Panel_Channels.Visible = True then
   begin
     Panel_Channels.Visible := False;
+    Panel_Button.Visible := False;
     Splitter.Visible := False;
   end
   else
   begin
     Panel_Channels.Visible := True;
+    Panel_Button.Visible := True;
     Splitter.Visible := True;
   end;
 end;
@@ -2125,82 +2102,88 @@ end;
 procedure TfrmStickyForm.sbFullScreenClick(Sender: TObject);
 var
   oldParent: TWinControl;
-  oldAlign: TAlign;
   wasPlaying: Boolean;
   currentPosition: Int64;
-  oldOnClick: TNotifyEvent;
-  oldOnDblClick: TNotifyEvent;
-  oldOnMouseDown: TMouseEvent;
-  oldOnMouseMove: TMouseMoveEvent;
-  oldOnMouseUp: TMouseEvent;
-  oldOnKeyDown: TKeyEvent;
-  oldOnKeyPress: TKeyPressEvent;
-  oldOnKeyUp: TKeyEvent;
 begin
+  // Сохраняем текущее состояние
   oldParent := FVlc.Parent;
-  oldAlign := FVlc.Align;
   wasPlaying := FVlc.IsPlaying;
 
-  oldOnClick := FVlc.OnClick;
-  oldOnDblClick := FVlc.OnDblClick;
-  oldOnMouseDown := FVlc.OnMouseDown;
-  oldOnMouseMove := FVlc.OnMouseMove;
-  oldOnMouseUp := FVlc.OnMouseUp;
+  // Сохраняем позицию воспроизведения
+  if wasPlaying then
+    currentPosition := FVlc.GetPosition;
 
+
+  // Создаем форму для полноэкранного режима
   aFullScreenForm := TFullScreenForm.Create(nil);
   try
-    aFullScreenForm.SetBounds(Monitor.Left, Monitor.Top, Monitor.Width, Monitor.Height);
-
-    aFullScreenForm.OnKeyDown := FullScreenFormKeyDown;
-    aFullScreenForm.OnDblClick := FullScreenFormDblClick;
+    // Настраиваем форму
+    aFullScreenForm.BorderStyle := bsNone;
+    aFullScreenForm.FormStyle := fsStayOnTop;
+    aFullScreenForm.Color := clBlack;
     aFullScreenForm.KeyPreview := True;
 
-    if wasPlaying then
-      FVlc.Pause;
+    // Устанавливаем размер на весь экран
+    aFullScreenForm.SetBounds(
+      Monitor.Left,
+      Monitor.Top,
+      Monitor.Width,
+      Monitor.Height
+    );
 
-    FVlc.OnClick := oldOnClick;
-    FVlc.OnDblClick := oldOnDblClick;
-    FVlc.OnMouseDown := oldOnMouseDown;
-    FVlc.OnMouseMove := oldOnMouseMove;
-    FVlc.OnMouseUp := oldOnMouseUp;
+    // Настраиваем обработчики событий
+    aFullScreenForm.OnKeyDown := FullScreenFormKeyDown;
+    aFullScreenForm.OnDblClick := FullScreenFormDblClick;
 
-    FVlc.Align := alNone;
-    FVlc.SetBounds(0, 0, Monitor.Width, Monitor.Height);
-    FVlc.Show;
+    // Перемещаем VLC-компонент на полноэкранную форму
+    FVlc.Parent := aFullScreenForm;
+    FVlc.Align := alClient;
+    FVlc.BringToFront;
 
+    // Показываем форму
+    aFullScreenForm.Show;
+
+    // Возобновляем воспроизведение
     if wasPlaying then
     begin
-      Sleep(200);
-      FVlc.Play;
+      if currentPosition > 0 then
+      begin
+        Sleep(50);
+        FVlc.SeekToTime(currentPosition);
+      end;
     end;
 
-    aFullScreenForm.ShowModal;
+    // Ждем, пока пользователь закроет форму (например, по Escape)
+    // Вместо ShowModal используем цикл обработки сообщений
+    while aFullScreenForm.Visible do
+    begin
+      Application.ProcessMessages;
+      Sleep(10);
+    end;
 
   finally
-    if FVlc.IsPlaying then
-      FVlc.Pause;
 
-    FVlc.OnClick := oldOnClick;
-    FVlc.OnDblClick := oldOnDblClick;
-    FVlc.OnMouseDown := oldOnMouseDown;
-    FVlc.OnMouseMove := oldOnMouseMove;
-    FVlc.OnMouseUp := oldOnMouseUp;
+    // Возвращаем VLC-компонент на исходное место
+    FVlc.Parent := oldParent;
+    FVlc.Align := alClient;
 
-    FVlc.Align := alNone;
-    FVlc.SetBounds(2, 2, Panel_VLC_Player.Width - 4, Panel_VLC_Player.Height - 4);
-    FVlc.Align := oldAlign;
+    // Принудительно обновляем отображение
+    FVlc.Invalidate;
+    FVlc.Update;
 
-    FVlc.Show;
-
-    if wasPlaying then
+    // Освобождаем форму
+    if Assigned(aFullScreenForm) then
     begin
-      Sleep(200);
-      FVlc.Play;
+      aFullScreenForm.Free;
+      aFullScreenForm := nil;
     end;
 
-    Panel_VLC_Player.Invalidate;
-
-    aFullScreenForm.Free;
+    // Обновляем родительский контейнер
+    if Assigned(oldParent) then
+    begin
+      oldParent.Invalidate;
+      oldParent.Update;
+    end;
   end;
 end;
 
@@ -2217,7 +2200,7 @@ begin
   begin
     Fvlc.Stop;
     LoadPNGToControl(FButtonDir + 'play.png', sbPlay);
-    FVlc.SetDisplayTextVisible(False);
+    FVlc.ShowStatusBar;
   end else
   begin
     idx := lbChannels.ItemIndex;
@@ -2239,6 +2222,7 @@ begin
   if FVlc.IsMuted then
   begin
     FVlc.Unmute;
+    FVlc.TopImagePath := FButtonDir + 'volume.png';
     LoadPNGToControl(FButtonDir + 'volume.png', sbVolume);
     FVlc.ShowTopImage := False;
   end
@@ -2246,6 +2230,7 @@ begin
   begin
     FVlc.Mute;
     LoadPNGToControl(FButtonDir + 'volume-mute.png', sbVolume);
+    FVlc.TopImagePath := FButtonDir + 'volume-mute.png';
     FVlc.ShowTopImage := True;
   end;
   sbVolume.Invalidate;
